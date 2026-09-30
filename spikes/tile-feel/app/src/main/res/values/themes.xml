@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.TileSpike" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <!-- QS_TILE_PREFERENCES target: floats over whatever is behind it so the
+         long-press picker reads as an overlay, not a settings screen. -->
+    <style name="Theme.TileSpike.Translucent" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Dialog</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <!-- Theme for the Dialog handed to TileService.showDialog(). DeviceDefault so
+         the OEM skin (HyperOS / OxygenOS) styles it the way its own tiles look. -->
+    <style name="Theme.TileSpike.TileDialog" parent="@android:style/Theme.DeviceDefault.Dialog.Alert">
+        <item name="android:windowMinWidthMajor">80%</item>
+        <item name="android:windowMinWidthMinor">90%</item>
+    </style>
+
+    <style name="Theme.TileSpike.TileDialog.Compose" parent="@android:style/Theme.DeviceDefault.Dialog.NoActionBar">
+        <item name="android:windowMinWidthMajor">80%</item>
+        <item name="android:windowMinWidthMinor">90%</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsFloating">true</item>
+    </style>
+
+</resources>

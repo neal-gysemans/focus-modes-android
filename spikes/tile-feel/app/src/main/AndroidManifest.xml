@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- NO android.permission.INTERNET on purpose: this spike is fully offline. -->
+
+    <!-- Normal permission; lets us read/observe DND. The *zen rule* APIs additionally
+         require the user-granted DND access (Notification Policy Access). -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+
+    <application
+        android:name=".SpikeApp"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.TileSpike">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- ================================================================
+             Long-press target for the QS tile. MUST be exported and carry the
+             QS_TILE_PREFERENCES action. Deliberately a *fast mode picker*,
+             not a settings dump: we are measuring whether long-press can feel
+             like iOS Control Center's "press and hold".
+             ================================================================ -->
+        <activity
+            android:name=".TilePrefsActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:label="@string/tile_prefs_label"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.TileSpike.Translucent">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+            </intent-filter>
+        </activity>
+
+        <!-- ================================================================
+             Configuration activity for the AutomaticZenRule. Required so the
+             system has somewhere to send the user when they tap our rule in
+             Settings > Sound > Do Not Disturb. Must be exported and declare
+             the AUTOMATIC_ZEN_RULE action + ruleType meta-data.
+             ================================================================ -->
+        <activity
+            android:name=".ZenRuleConfigActivity"
+            android:exported="true"
+            android:label="@string/zen_rule_name">
+            <intent-filter>
+                <action android:name="android.app.action.AUTOMATIC_ZEN_RULE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.zen.automatic.ruleType"
+                android:value="@string/zen_rule_type" />
+        </activity>
+
+        <!-- Plain activity used to demo startActivityAndCollapse(PendingIntent). -->
+        <activity
+            android:name=".LaunchedFromTileActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop" />
+
+        <!-- ================================================================
+             PRIMARY TILE. Label must be <= 18 chars ("Focus" = 5).
+             ACTIVE_TILE = we push updates ourselves (requestListeningState).
+             TOGGLEABLE_TILE = tell the system this behaves like a switch, so
+             the platform/OEM can render it with the right affordance.
+             ================================================================ -->
+        <service
+            android:name=".FocusTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_focus_off"
+            android:label="@string/tile_label_focus"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
+
+        <!-- ================================================================
+             SECOND TILE, android:enabled="false" by default. The app can flip
+             it with PackageManager.setComponentEnabledSetting to observe the
+             "one tile per mode" pattern: does it show up in / vanish from the
+             QS edit list, and does an already-placed tile lose its position?
+             ================================================================ -->
+        <service
+            android:name=".SecondTileService"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@drawable/ic_mode_sleep"
+            android:label="@string/tile_label_second"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
+
+    </application>
+</manifest>
