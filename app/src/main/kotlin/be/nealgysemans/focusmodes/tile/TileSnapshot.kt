@@ -1,5 +1,9 @@
 package be.nealgysemans.focusmodes.tile
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
 /**
  * A mode flattened to exactly what a tile or a picker needs to draw it.
  *
@@ -98,32 +102,73 @@ fun TileSnapshot.tap(): TileTap {
 }
 
 /**
- * Process-wide warm copy of [TileSnapshot].
+ * Process-wide warm copy of [TileSnapshot], and the tile's render source.
  *
- * `TileService.onClick()` has a hard latency budget before the shade feels broken,
- * and a DataStore read inside it costs tens of milliseconds on a cold page cache.
- * So the durable stores are mirrored here: warmed in `onStartListening` (which the
- * platform always calls before `onClick`), refreshed by `notification/SurfaceSync`
- * on every state change from any surface, and read with a single volatile load on
- * the click path.
+ * Two jobs, and they are the same job:
  *
- * Writes are whole-value replacements of an immutable snapshot, so a reader either
- * sees the old state or the new one — never a half-updated one — without a lock.
+ *  - **Warm read for the click path.** `TileService.onClick()` has a hard latency
+ *    budget before the shade feels broken, and a DataStore read inside it costs tens
+ *    of milliseconds on a cold page cache. [value] is a single volatile load.
+ *  - **The thing the tile paints from.** [snapshots] is a `StateFlow`, collected by
+ *    `FocusTileService` for as long as it is listening. This is what makes the tile
+ *    repaint when some *other* surface changes the mode: `requestListeningState` only
+ *    helps when the tile is not already listening, so a nudge alone leaves an open
+ *    shade showing stale state indefinitely.
+ *
+ * ## Who may write, and why it matters
+ *
+ * There is exactly one authoritative writer — `notification/SurfaceSync`, via
+ * [publish] — plus the tile's own optimistic [flipTo]. Everything else reads.
+ *
+ * That rule is not stylistic. It was a bug: the tile used to publish the result of a
+ * *speculative* read started in `onStartListening`, which could land after a tap had
+ * already flipped the tile and revert it to pre-tap state — a mode that was visibly
+ * turned off would spring back to "on" 11 ms later and stay there. A read that began
+ * before a write cannot be allowed to overwrite the result of that write, so the only
+ * speculative path left ([primeIfCold]) is the one that runs when there is nothing to
+ * overwrite.
  */
 object TileStateCache {
 
-    @Volatile
-    var value: TileSnapshot = TileSnapshot()
-        private set
+    private val _snapshots = MutableStateFlow(TileSnapshot())
+
+    /** Live state for the tile to render from. Conflated: equal snapshots do not repaint. */
+    val snapshots: StateFlow<TileSnapshot> = _snapshots.asStateFlow()
+
+    /** The current snapshot, for the click path's single volatile read. */
+    val value: TileSnapshot get() = _snapshots.value
 
     /** True once a real read has landed. False means [value] is still the empty default. */
     @Volatile
     var warm: Boolean = false
         private set
 
+    /**
+     * Publish engine truth.
+     *
+     * Only `SurfaceSync` calls this, and only in response to an actual state change it
+     * observed — so this value is by construction newer than any optimistic flip that
+     * preceded the change.
+     */
     fun publish(snapshot: TileSnapshot) {
-        value = snapshot
+        _snapshots.value = snapshot
         warm = true
+    }
+
+    /**
+     * Seed the cache from a direct read, but only while it is still empty.
+     *
+     * The cold-start case: the tile is listening (or has been tapped) before
+     * `SurfaceSync`'s first emission has arrived. Once anything real is in the cache
+     * this is a no-op, which is what keeps a slow read from overwriting a fast tap.
+     *
+     * @return true if the snapshot was taken.
+     */
+    fun primeIfCold(snapshot: TileSnapshot): Boolean = synchronized(this) {
+        if (warm) return false
+        _snapshots.value = snapshot
+        warm = true
+        true
     }
 
     /**
@@ -133,11 +178,24 @@ object TileStateCache {
      * milliseconds; this exists so that a *second* tap arriving before the first one
      * lands still sees the state the user can see on screen.
      */
-    fun flipTo(modeId: String?) {
-        val current = value
-        value = current.copy(
+    fun flipTo(modeId: String?) = synchronized(this) {
+        val current = _snapshots.value
+        _snapshots.value = current.copy(
             activeModeId = modeId,
             lastUsedModeId = modeId ?: current.lastUsedModeId,
         )
+        warm = true
+    }
+
+    /**
+     * Return to the cold, empty state.
+     *
+     * Exists for tests only: [warm] is sticky by design (it is the flag that stops a
+     * stale read from overwriting live state), so without this no test could exercise
+     * the cold-start branch twice in one JVM.
+     */
+    internal fun resetForTest() = synchronized(this) {
+        _snapshots.value = TileSnapshot()
+        warm = false
     }
 }

@@ -16,6 +16,7 @@ import be.nealgysemans.focusmodes.ui.MainActivity
 import be.nealgysemans.focusmodes.ui.ModeGlyphs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -24,10 +25,14 @@ import kotlinx.coroutines.withContext
 /**
  * The Quick Settings tile — the app's primary surface.
  *
- * Registered as an **active** tile (`META_DATA_ACTIVE_TILE`) so state changes from any
- * surface can push a repaint through [TileNudge], and as a **toggleable** tile
- * (`META_DATA_TOGGLEABLE_TILE`) so the platform renders on/off semantics rather than a
- * launcher shortcut.
+ * Registered as an **active** tile (`META_DATA_ACTIVE_TILE`) so a state change made
+ * while the shade is closed can open a listening window through [TileNudge], and as a
+ * **toggleable** tile (`META_DATA_TOGGLEABLE_TILE`) so the platform renders on/off
+ * semantics rather than a launcher shortcut.
+ *
+ * While the shade is *open* the nudge is a no-op — the tile is already listening — so
+ * repainting is driven by collecting [TileStateCache.snapshots] for the duration of the
+ * listening window. Between the two, every change from every surface lands on the tile.
  *
  * ## Latency discipline
  *
@@ -62,11 +67,22 @@ class FocusTileService : TileService() {
     private val icons = HashMap<Int, Icon>()
 
     /**
-     * True between [onStartListening] and [onStopListening], i.e. while `qsTile` is
-     * a valid handle. Guards the async repaint that lands after a warm-up.
+     * Repaints on the main thread. Separate from [scope] because `qsTile` must only be
+     * touched from the main thread, and because this one is tied to the listening window
+     * rather than to the service's lifetime.
      */
-    @Volatile
-    private var listening = false
+    private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    /**
+     * Collects [TileStateCache.snapshots] for the duration of one listening window.
+     *
+     * This is what keeps the tile honest while the shade is open. `requestListeningState`
+     * only produces an `onStartListening` when the tile is *not* already listening, so a
+     * nudge from `SurfaceSync` cannot repaint an open shade — without this collector a
+     * mode turned off from the notification, the app or a schedule leaves the tile
+     * showing the old mode until the user closes and reopens the shade.
+     */
+    private var renderJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -77,6 +93,8 @@ class FocusTileService : TileService() {
     }
 
     override fun onDestroy() {
+        renderJob?.cancel()
+        mainScope.cancel()
         scope.cancel()
         super.onDestroy()
     }
@@ -89,19 +107,23 @@ class FocusTileService : TileService() {
 
     override fun onStartListening() {
         super.onStartListening()
-        listening = true
-        // Paint immediately from whatever is already warm — on a live process this is
-        // current, and painting before the reads means the shade never shows a blank
-        // tile while DataStore is opening. On a genuinely cold process the cache would
-        // say "no modes, no grant", which renders as UNAVAILABLE — so nothing is painted
-        // until the read lands, leaving whatever the platform last had rather than
-        // flashing the tile out and back.
-        if (TileStateCache.warm) render(TileStateCache.value)
+        // Paint every snapshot for as long as this listening window lasts. The first
+        // value arrives immediately (StateFlow replays), so a live process paints from
+        // the warm cache on the same frame the shade opens; a cold one paints nothing
+        // until the prime below lands, leaving whatever the platform last had rather
+        // than flashing the tile to UNAVAILABLE and back.
+        renderJob?.cancel()
+        renderJob = mainScope.launch {
+            TileStateCache.snapshots.collect { snapshot ->
+                if (TileStateCache.warm) render(snapshot)
+            }
+        }
         warmUp()
     }
 
     override fun onStopListening() {
-        listening = false
+        renderJob?.cancel()
+        renderJob = null
         super.onStopListening()
     }
 
@@ -148,7 +170,7 @@ class FocusTileService : TileService() {
             val snapshot = runCatching { TileSnapshotSource.read(applicationContext) }
                 .onFailure { Log.w(TAG, "cold tap snapshot read failed", it) }
                 .getOrNull() ?: return@launch
-            TileStateCache.publish(snapshot)
+            TileStateCache.primeIfCold(snapshot)
             withContext(Dispatchers.Main) { onClick() }
         }
     }
@@ -184,24 +206,27 @@ class FocusTileService : TileService() {
     // -------------------------------------------------------------------- rendering
 
     /**
-     * Reconcile and repaint.
+     * Reconcile, and seed the cache if nothing has filled it yet.
      *
      * [AppGraph.reconcileAsync] is the engine-truth half: it heals a rule the user
-     * edited in Settings and converges on what the clock says should be on, so the
-     * tile cannot show a mode the system has already dropped. The snapshot read that
-     * follows is the display half. Both are off the main thread; the repaint hops back
-     * and is skipped if the listening window closed in the meantime.
+     * edited in Settings and converges on what the clock says should be on, so the tile
+     * cannot show a mode the system has already dropped. Any state it changes comes back
+     * through `SurfaceSync` and repaints the tile via [renderJob], like every other
+     * surface's change does.
+     *
+     * The read is only a *cold-start* seed. It used to publish unconditionally, which
+     * was the repaint bug: a read issued here before a tap could complete after it and
+     * revert the tile to the pre-tap mode. [TileStateCache.primeIfCold] is a no-op once
+     * anything real is in the cache, so a slow read can no longer outrank a fast tap.
      */
     private fun warmUp() {
         scope.launch {
             AppGraph.from(applicationContext).reconcileAsync()
+            if (TileStateCache.warm) return@launch
             val snapshot = runCatching { TileSnapshotSource.read(applicationContext) }
                 .onFailure { Log.w(TAG, "snapshot read failed", it) }
                 .getOrNull() ?: return@launch
-            TileStateCache.publish(snapshot)
-            withContext(Dispatchers.Main) {
-                if (listening) render(snapshot)
-            }
+            TileStateCache.primeIfCold(snapshot)
         }
     }
 

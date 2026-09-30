@@ -1,6 +1,9 @@
 package be.nealgysemans.focusmodes.tile
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 /**
@@ -13,6 +16,9 @@ import org.junit.Test
  * and not an instrumented one.
  */
 class TileTapTest {
+
+    @Before
+    fun resetCache() = TileStateCache.resetForTest()
 
     private val work = TileMode(id = "work", name = "Work", glyphRes = 1, color = 0x1)
     private val sleep = TileMode(id = "sleep", name = "Sleep", glyphRes = 2, color = 0x2)
@@ -119,5 +125,42 @@ class TileTapTest {
 
         assertEquals(null, TileStateCache.value.activeModeId)
         assertEquals(work.id, TileStateCache.value.lastUsedModeId)
+    }
+
+    // --- the stale-read clobber ----------------------------------------------
+    //
+    // On-device regression: a snapshot read issued by onStartListening could complete
+    // *after* a tap had flipped the tile, publish its pre-tap contents, and revert the
+    // tile to the mode the user had just switched off — permanently, because nothing
+    // repainted afterwards. A speculative read may only ever seed an empty cache.
+
+    @Test
+    fun `a speculative read cannot overwrite an optimistic flip`() {
+        val readInFlight = snapshot(activeModeId = work.id, lastUsedModeId = work.id)
+        TileStateCache.publish(readInFlight)
+
+        TileStateCache.flipTo(null)
+        val accepted = TileStateCache.primeIfCold(readInFlight)
+
+        assertFalse("a warm cache must reject a speculative read", accepted)
+        assertEquals(null, TileStateCache.value.activeModeId)
+    }
+
+    @Test
+    fun `a speculative read seeds a cold cache`() {
+        val accepted = TileStateCache.primeIfCold(snapshot(activeModeId = sleep.id))
+
+        assertTrue("a cold cache must accept the first read", accepted)
+        assertTrue(TileStateCache.warm)
+        assertEquals(sleep.id, TileStateCache.value.activeModeId)
+    }
+
+    @Test
+    fun `engine truth is published to the render flow`() {
+        // The tile renders by collecting this flow, so a publish that does not reach it
+        // is a tile that never repaints while the shade is open.
+        TileStateCache.publish(snapshot(activeModeId = work.id))
+
+        assertEquals(work.id, TileStateCache.snapshots.value.activeModeId)
     }
 }
