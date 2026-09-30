@@ -17,9 +17,14 @@ import kotlinx.coroutines.flow.flowOn
  * [TilePreferences] (how the tile behaves).
  *
  * This is the only place those three are joined, so every surface — tile, picker,
- * long-press grid, ongoing notification — renders from one derivation and they
- * cannot drift apart. Whichever surface changed the state, the change arrives here
- * as a Flow emission and fans back out from [flow].
+ * long-press grid, ongoing notification, home-screen widget — renders from one
+ * derivation and they cannot drift apart. Whichever surface changed the state, the
+ * change arrives here as a Flow emission and fans back out from [flow].
+ *
+ * It is also the widget's state source, which is why the widget keeps no Glance state
+ * of its own: `widget/FocusWidget` collects this flow inside its composition, so a
+ * widget re-rendered after process death re-derives from Room and DataStore rather than
+ * from a copy that could be stale or absent.
  */
 object TileSnapshotSource {
 
@@ -45,7 +50,7 @@ object TileSnapshotSource {
                 activeModeId = active.activeModeId,
                 activeSince = active.since,
                 lastUsedModeId = tilePrefs.lastUsedModeId,
-                alwaysAsk = tilePrefs.alwaysAsk,
+                tapBehavior = tilePrefs.tapBehavior,
                 dndGranted = graph.permissionHealth.dndAccess().granted,
             )
         }

@@ -37,8 +37,31 @@
     <!-- Tile card in the app. -->
     <string name="tile_card_title">Quick Settings tile</string>
     <string name="action_add_tile">Add the Focus tile</string>
-    <string name="always_ask_title">Always ask which mode</string>
-    <string name="always_ask_summary">Tapping the tile opens the picker instead of turning on the mode you used last.</string>
+
+    <!-- What a plain tap on the tile does. Three segments of one control, so the
+         labels have to survive being a third of the card's width each. -->
+    <string name="tap_behavior_title">When you tap the tile</string>
+    <string name="tap_behavior_last_used">Last used</string>
+    <string name="tap_behavior_last_used_summary">Turns on the mode you used last, and off again when one is on.</string>
+    <string name="tap_behavior_always_ask">Ask</string>
+    <string name="tap_behavior_always_ask_summary">Opens the picker every time, instead of choosing a mode for you.</string>
+    <string name="tap_behavior_cycle">Cycle</string>
+    <string name="tap_behavior_cycle_summary">Steps through your modes in order, then back to off.</string>
+
+    <!-- Home-screen widget. The description is shown in the widget picker. -->
+    <string name="widget_label">Focus</string>
+    <string name="widget_description">Your current Focus, with one tap to turn it on or off. Make it wider for a button per mode.</string>
+    <!-- Widget button while nothing is on: the name of the thing, not a mode. -->
+    <string name="widget_off_label">Focus</string>
+    <!-- Announced for the whole widget so TalkBack does not read a bare glyph. -->
+    <string name="widget_state_on">%1$s is on</string>
+    <string name="widget_state_off">No focus mode is on</string>
+    <!-- Shown instead of the buttons when Do Not Disturb access is missing or no
+         modes exist: both are only fixable in the app, and the widget taps through. -->
+    <string name="widget_unavailable">Open Focus Modes to finish setting up</string>
+    <!-- Name shown on the widget picker's static preview. Not a real mode: the preview
+         cannot read the database, so it stands in for whatever the user has defined. -->
+    <string name="widget_preview_mode">Work</string>
 
     <!-- Mode editor. -->
     <string name="mode_editor_title">Edit mode</string>

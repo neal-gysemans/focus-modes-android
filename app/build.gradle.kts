@@ -58,6 +58,11 @@ dependencies {
 
     implementation(libs.androidx.datastore.preferences)
 
+    // The home-screen widget. Glance composes RemoteViews, so the widget shares the
+    // app's glyph drawables and reads the same Room/DataStore truth every other
+    // surface reads — no parallel widget state to drift.
+    implementation(libs.androidx.glance.appwidget)
+
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
 

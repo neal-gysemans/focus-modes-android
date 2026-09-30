@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What the widget picker draws.
+
+  A static stand-in for the 2x1 layout that widget/FocusWidget composes: the same rounded
+  card, the same filled circular chip, the same name beside it. It is a hand-written
+  layout rather than a rendered bitmap so it follows the device's light/dark setting (the
+  colours below have a values-night variant) and stays sharp at any picker density.
+
+  Deliberately shows a mode as *on*: a picker preview of the off state would be a grey
+  ring and the word "Focus", which tells the user nothing about what the widget does.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_preview_card"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="12dp"
+    android:paddingTop="12dp"
+    android:paddingEnd="12dp"
+    android:paddingBottom="12dp">
+
+    <ImageView
+        android:layout_width="38dp"
+        android:layout_height="38dp"
+        android:background="@drawable/widget_preview_chip"
+        android:contentDescription="@string/widget_label"
+        android:padding="9dp"
+        android:src="@drawable/ic_mode_briefcase"
+        android:tint="@android:color/white" />
+
+    <TextView
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="@string/widget_preview_mode"
+        android:textColor="@color/widget_preview_accent"
+        android:textSize="15sp"
+        android:textStyle="bold" />
+
+</LinearLayout>

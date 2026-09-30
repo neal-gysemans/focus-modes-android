@@ -22,18 +22,23 @@ class TileTapTest {
 
     private val work = TileMode(id = "work", name = "Work", glyphRes = 1, color = 0x1)
     private val sleep = TileMode(id = "sleep", name = "Sleep", glyphRes = 2, color = 0x2)
+    private val gym = TileMode(id = "gym", name = "Gym", glyphRes = 3, color = 0x3)
 
+    /**
+     * `modes` is in the order the user arranged, because that is what the DAO returns
+     * (`ORDER BY sort_order, name`) and what [TapBehavior.CYCLE] steps through.
+     */
     private fun snapshot(
         modes: List<TileMode> = listOf(work, sleep),
         activeModeId: String? = null,
         lastUsedModeId: String? = null,
-        alwaysAsk: Boolean = false,
+        tapBehavior: TapBehavior = TapBehavior.LAST_USED,
         dndGranted: Boolean = true,
     ) = TileSnapshot(
         modes = modes,
         activeModeId = activeModeId,
         lastUsedModeId = lastUsedModeId,
-        alwaysAsk = alwaysAsk,
+        tapBehavior = tapBehavior,
         dndGranted = dndGranted,
     )
 
@@ -95,7 +100,10 @@ class TileTapTest {
 
     @Test
     fun `always ask outranks the last used mode`() {
-        assertEquals(TileTap.Ask, snapshot(lastUsedModeId = work.id, alwaysAsk = true).tap())
+        assertEquals(
+            TileTap.Ask,
+            snapshot(lastUsedModeId = work.id, tapBehavior = TapBehavior.ALWAYS_ASK).tap(),
+        )
     }
 
     @Test
@@ -103,7 +111,195 @@ class TileTapTest {
         // Otherwise the picker would be the only way off, which is two taps to undo one.
         assertEquals(
             TileTap.Deactivate(work.id),
-            snapshot(activeModeId = work.id, alwaysAsk = true).tap(),
+            snapshot(activeModeId = work.id, tapBehavior = TapBehavior.ALWAYS_ASK).tap(),
+        )
+    }
+
+    // --- cycle ---------------------------------------------------------------
+    //
+    // The behaviour the spike tile had and daily use asked for back: off → first → next
+    // → … → last → off, in the user's sort order, never a dialog. The ring is closed
+    // through off deliberately — a cycling tile that could not be turned off in one tap
+    // would fail the one thing every tile has to do.
+
+    private fun cycling(activeModeId: String?) = snapshot(
+        modes = listOf(work, sleep, gym),
+        activeModeId = activeModeId,
+        // Set, and deliberately never the mode the assertions expect: cycling must step
+        // from where the ring is, not from where the user last was.
+        lastUsedModeId = gym.id,
+        tapBehavior = TapBehavior.CYCLE,
+    )
+
+    @Test
+    fun `cycling from off turns on the first mode in sort order`() {
+        assertEquals(TileTap.Activate(work.id), cycling(activeModeId = null).tap())
+    }
+
+    @Test
+    fun `cycling steps to the next mode in sort order`() {
+        assertEquals(TileTap.Activate(sleep.id), cycling(activeModeId = work.id).tap())
+        assertEquals(TileTap.Activate(gym.id), cycling(activeModeId = sleep.id).tap())
+    }
+
+    @Test
+    fun `cycling past the last mode turns everything off`() {
+        assertEquals(TileTap.Deactivate(gym.id), cycling(activeModeId = gym.id).tap())
+    }
+
+    @Test
+    fun `cycling ignores the last used mode`() {
+        // The whole ring, from off and back to off, never visits gym early even though it
+        // is the last-used mode. A cycle that started from last-used would not be a cycle.
+        assertEquals(TileTap.Activate(work.id), cycling(activeModeId = null).tap())
+        assertEquals(TileTap.Activate(sleep.id), cycling(activeModeId = work.id).tap())
+    }
+
+    @Test
+    fun `cycling never opens the picker`() {
+        // Not even in the cases LAST_USED asks in: no last-used mode at all, and several
+        // modes to choose from. Asking would defeat the point of picking "cycle".
+        assertEquals(
+            TileTap.Activate(work.id),
+            snapshot(lastUsedModeId = null, tapBehavior = TapBehavior.CYCLE).tap(),
+        )
+    }
+
+    @Test
+    fun `cycling with one mode is a plain toggle`() {
+        val single = listOf(work)
+        assertEquals(
+            TileTap.Activate(work.id),
+            snapshot(modes = single, tapBehavior = TapBehavior.CYCLE).tap(),
+        )
+        assertEquals(
+            TileTap.Deactivate(work.id),
+            snapshot(modes = single, activeModeId = work.id, tapBehavior = TapBehavior.CYCLE).tap(),
+        )
+    }
+
+    @Test
+    fun `cycling restarts when the active id names a deleted mode`() {
+        // Deactivating it would be ignored by the engine as UNKNOWN_MODE, so treating it
+        // as "off" is what keeps the ring reachable instead of stuck on a ghost.
+        assertEquals(TileTap.Activate(work.id), cycling(activeModeId = "deleted").tap())
+    }
+
+    @Test
+    fun `cycling still cannot act without DND access`() {
+        assertEquals(
+            TileTap.Blocked,
+            snapshot(tapBehavior = TapBehavior.CYCLE, dndGranted = false).tap(),
+        )
+    }
+
+    @Test
+    fun `cycling with no modes cannot act`() {
+        assertEquals(
+            TileTap.Blocked,
+            snapshot(modes = emptyList(), tapBehavior = TapBehavior.CYCLE).tap(),
+        )
+    }
+
+    // --- the stored preference ----------------------------------------------
+
+    @Test
+    fun `tap behaviour is resolved by name so reordering the enum is safe`() {
+        TapBehavior.entries.forEach { behaviour ->
+            assertEquals(behaviour, TapBehavior.ofName(behaviour.name))
+        }
+    }
+
+    @Test
+    fun `an absent or unknown stored behaviour falls back to last used`() {
+        // A database or DataStore restored from a newer build can name a behaviour this
+        // build does not have; falling back beats crashing the tile's warm-up.
+        assertEquals(TapBehavior.LAST_USED, TapBehavior.ofName(null))
+        assertEquals(TapBehavior.LAST_USED, TapBehavior.ofName("TEACH_ME_TO_MEDITATE"))
+    }
+
+    // --- migrating the boolean this setting used to be -----------------------
+    //
+    // The only place an upgrading user's setting can change without them touching it,
+    // so the rule is pinned here rather than left to a read-through in TilePreferences.
+
+    @Test
+    fun `a stored alwaysAsk of true becomes always ask`() {
+        assertEquals(
+            TapBehavior.ALWAYS_ASK,
+            tapBehaviorFrom(storedName = null, legacyAlwaysAsk = true),
+        )
+    }
+
+    @Test
+    fun `a stored alwaysAsk of false becomes last used`() {
+        assertEquals(
+            TapBehavior.LAST_USED,
+            tapBehaviorFrom(storedName = null, legacyAlwaysAsk = false),
+        )
+    }
+
+    @Test
+    fun `a store that was never written becomes last used`() {
+        assertEquals(
+            TapBehavior.LAST_USED,
+            tapBehaviorFrom(storedName = null, legacyAlwaysAsk = null),
+        )
+    }
+
+    @Test
+    fun `a chosen behaviour outranks a leftover alwaysAsk`() {
+        // Choosing a behaviour clears the old key, but a store written by a build in
+        // between could still hold both — and the explicit choice has to win.
+        assertEquals(
+            TapBehavior.CYCLE,
+            tapBehaviorFrom(storedName = "CYCLE", legacyAlwaysAsk = true),
+        )
+        // Including when the name is one this build does not know: falling back to the
+        // default is right, resurrecting the retired boolean is not.
+        assertEquals(
+            TapBehavior.LAST_USED,
+            tapBehaviorFrom(storedName = "SOMETHING_NEWER", legacyAlwaysAsk = true),
+        )
+    }
+
+    // --- the widget's own button --------------------------------------------
+    //
+    // The widget shows one named mode and toggles it, whatever the *tile's* preference
+    // says — so these assertions are the point: a cycling tile must not turn the widget
+    // into a cycling button.
+
+    @Test
+    fun `the widget button toggles last used regardless of tap behaviour`() {
+        TapBehavior.entries.forEach { behaviour ->
+            assertEquals(
+                "off-tap under $behaviour",
+                TileTap.Activate(sleep.id),
+                snapshot(lastUsedModeId = sleep.id, tapBehavior = behaviour).toggleLastUsed(),
+            )
+            assertEquals(
+                "on-tap under $behaviour",
+                TileTap.Deactivate(work.id),
+                snapshot(
+                    activeModeId = work.id,
+                    lastUsedModeId = work.id,
+                    tapBehavior = behaviour,
+                ).toggleLastUsed(),
+            )
+        }
+    }
+
+    @Test
+    fun `the widget button asks when there is nothing to re-activate`() {
+        // "Ask" from the widget means "open the picker activity"; it cannot show a dialog.
+        assertEquals(TileTap.Ask, snapshot(lastUsedModeId = null).toggleLastUsed())
+    }
+
+    @Test
+    fun `the widget button is blocked without DND access`() {
+        assertEquals(
+            TileTap.Blocked,
+            snapshot(lastUsedModeId = work.id, dndGranted = false).toggleLastUsed(),
         )
     }
 

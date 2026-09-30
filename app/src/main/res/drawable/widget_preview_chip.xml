@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The preview's filled circular glyph chip, in the seeded Work indigo.
+
+  The real widget builds this shape at runtime (a Glance cornerRadius at half the chip's
+  size, because Glance has no shape modifier); this is the static twin for the picker.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@color/widget_preview_accent" />
+</shape>

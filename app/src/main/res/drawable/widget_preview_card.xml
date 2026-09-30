@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The preview card's rounded surface.
+
+  The radius is the platform's own system_app_widget_background_radius, the same dimension
+  widget/FocusWidget rounds its real card with, so the picker preview and the placed widget
+  agree about their corners on whatever launcher this is.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="@android:dimen/system_app_widget_background_radius" />
+    <solid android:color="@color/widget_preview_card" />
+</shape>

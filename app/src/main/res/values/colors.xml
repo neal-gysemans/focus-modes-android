@@ -1,4 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#1B1B2F</color>
+
+    <!--
+      Colours for the widget picker's static preview only (res/layout/widget_focus_preview).
+      The placed widget takes its surface and text colours from GlanceTheme, i.e. from the
+      system's own day/night widget palette; a static XML layout cannot, so these are
+      literals with a values-night variant next to them.
+    -->
+    <color name="widget_preview_card">#FFFFFFFF</color>
+    <!-- The seeded Work indigo, kept in step with ui/ModePalette's first entry. -->
+    <color name="widget_preview_accent">#FF3D5AFE</color>
 </resources>
