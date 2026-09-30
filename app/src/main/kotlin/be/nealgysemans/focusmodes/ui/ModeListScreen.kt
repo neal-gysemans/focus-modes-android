@@ -100,9 +100,10 @@ fun ModeListScreen(
     val active by activeState.collectAsStateWithLifecycle(initialValue = ActiveState.IDLE)
     val prefs by tilePrefs.collectAsStateWithLifecycle(initialValue = TilePrefs())
 
-    // Recomputed on each composition on purpose: these grants can be revoked while
-    // the app is backgrounded, so a cached value would lie.
-    val checks = health.checkAll()
+    // Re-probed on resume and on the DND-access broadcast. A plain `health.checkAll()`
+    // here would be read once and never again — the grants change in Settings, not on
+    // this screen, so nothing in the composition would ever invalidate it.
+    val checks = rememberHealthChecks(health)
 
     var editing by remember { mutableStateOf<ModeEntity?>(null) }
 
