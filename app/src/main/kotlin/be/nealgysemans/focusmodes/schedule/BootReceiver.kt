@@ -22,9 +22,12 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action !in HANDLED_ACTIONS) return
         Log.d(TAG, "reconciling after ${intent.action}")
-        // TODO(skeleton): goAsync() so the reconcile can finish off the main
-        //  thread within the receiver's lifetime, then AlarmScheduler.rearm().
-        AppGraph.from(context).reconcileAsync()
+        // goAsync so the reconcile — which reads SQLite and DataStore and talks to
+        // NotificationManager — can finish off the main thread while the process is
+        // still held alive. reconcileAsync re-arms the next boundary itself, which is
+        // the other half of what a reboot destroyed.
+        val pending = goAsync()
+        AppGraph.from(context).reconcileAsync { pending.finish() }
     }
 
     private companion object {

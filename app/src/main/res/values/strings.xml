@@ -5,6 +5,11 @@
 
     <string name="zen_trigger_description">Managed by Focus Modes</string>
 
+    <!-- Shown by the system when it offers rule types this app provides. -->
+    <string name="core_zen_rule_type">Focus mode</string>
+    <!-- Label of the rule-owner activity the system launches to configure a mode. -->
+    <string name="core_zen_rule_config_label">Focus mode</string>
+
     <string name="channel_status_name">Active mode</string>
     <string name="channel_status_description">Shows which focus mode is on, with a shortcut to turn it off.</string>
 

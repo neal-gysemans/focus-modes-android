@@ -2,8 +2,10 @@ package be.nealgysemans.focusmodes.zen
 
 import android.app.AutomaticZenRule
 import android.app.NotificationManager
+import android.content.ComponentName
 import android.content.Context
 import android.net.Uri
+import android.os.SystemClock
 import android.service.notification.Condition
 import android.service.notification.ZenDeviceEffects
 import android.service.notification.ZenPolicy
@@ -13,18 +15,23 @@ import be.nealgysemans.focusmodes.engine.ActivationSource
 import be.nealgysemans.focusmodes.engine.FocusMode
 import be.nealgysemans.focusmodes.engine.ModeCatalog
 import be.nealgysemans.focusmodes.engine.PeopleFilter
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * The real [ZenAdapter], wrapping `NotificationManager`'s `AutomaticZenRule` API.
  *
  * Everything here needs DND access (`isNotificationPolicyAccessGranted`); see
- * `health/PermissionHealth`. Without it every call below throws or silently
- * no-ops, so the UI must gate on that grant before the engine ever runs.
+ * `health/PermissionHealth`. Without it every call throws `SecurityException`, so
+ * every entry point runs inside [guarded], which degrades to a logged no-op. A focus
+ * app that crashes a boot receiver because a grant was revoked overnight is worse
+ * than one that stays quiet until the user fixes the grant.
  *
- * Skeleton status: the API surface, the id/condition plumbing and the domain →
- * `ZenPolicy`/`ZenDeviceEffects` mapping are real; the write paths are marked
- * TODO because they need spike #1's findings on whether HyperOS honours
- * third-party rules at all.
+ * Verified on the Xiaomi 17T Pro (HyperOS 3.0 / Android 16), spike #1:
+ *  - `addAutomaticZenRule` works and the rule is stored field-for-field intact.
+ *  - `getAutomaticZenRuleState` is reliable; activation lands in ~15 ms.
+ *  - Snooze semantics are stock: after the user turns a rule off from a system
+ *    surface, `STATE_TRUE` with `SOURCE_SCHEDULE` is *silently refused* while
+ *    `SOURCE_USER_ACTION` punches through. Hence [setState] always reads back.
  */
 class SystemZenAdapter(
     private val context: Context,
@@ -40,58 +47,124 @@ class SystemZenAdapter(
     private val notificationManager: NotificationManager
         get() = context.getSystemService(NotificationManager::class.java)
 
-    override fun ensureRule(mode: FocusMode): String? {
-        val rule = buildRule(mode)
-        val existingId = mode.zenRuleId
+    /**
+     * Rule ids this process drove itself, with the `elapsedRealtime` of the write.
+     *
+     * The status broadcast arrives ~50 ms after every change, including our own.
+     * Without this, each activation we perform would bounce back as an "external"
+     * activation and cost a needless reconcile. Read by `ZenStatusReceiver` via
+     * [wasSelfInitiated]; an empty map (fresh process) just means "unknown", and
+     * the receiver then falls back to reconciling, which is always safe.
+     */
+    private val selfInitiated = ConcurrentHashMap<String, Long>()
 
-        // TODO(spike-1): create or update for real once we know HyperOS accepts
-        //  third-party rules. Shape:
-        //    if (existingId == null) {
-        //        val id = notificationManager.addAutomaticZenRule(rule)
-        //        onRuleIdResolved(mode.id, id)
-        //        return id
-        //    }
-        //    if (notificationManager.getAutomaticZenRule(existingId) == null) {
-        //        // user deleted it in Settings -> recreate and re-cache the id
-        //        val id = notificationManager.addAutomaticZenRule(rule)
-        //        onRuleIdResolved(mode.id, id)
-        //        return id
-        //    }
-        //    notificationManager.updateAutomaticZenRule(existingId, rule)
-        //  Caveat from the feasibility study: once a user edits a rule in
-        //  Settings the platform may reject later app updates to it, so a failed
-        //  update must not be treated as an error.
-        Log.d(TAG, "ensureRule(${mode.id}) -> stub; rule=${rule.name} existingId=$existingId")
-        return existingId
-    }
+    override fun ensureRule(mode: FocusMode): String? =
+        guarded("ensureRule(${mode.id})", fallback = mode.zenRuleId) {
+            val desired = buildRule(mode)
+            val existingId = mode.zenRuleId
+                ?: return@guarded addRule(mode, desired)
 
-    override fun activate(modeId: String, source: ActivationSource) {
-        val ruleId = ruleIdFor(modeId) ?: return
-        val condition = conditionFor(modeId, Condition.STATE_TRUE, source)
-        // TODO(spike-1): notificationManager.setAutomaticZenRuleState(ruleId, condition)
-        Log.d(TAG, "activate($modeId) -> stub; ruleId=$ruleId condition=$condition")
-    }
+            val stored = notificationManager.getAutomaticZenRule(existingId)
+            if (stored == null) {
+                // The user deleted the rule in Settings (or an OEM cleanup did).
+                // Re-add and re-cache: Room is the source of truth, not the system.
+                Log.i(TAG, "rule $existingId for ${mode.id} is gone; adding a fresh one")
+                return@guarded addRule(mode, desired)
+            }
 
-    override fun deactivate(modeId: String, source: ActivationSource) {
-        val ruleId = ruleIdFor(modeId) ?: return
-        val condition = conditionFor(modeId, Condition.STATE_FALSE, source)
-        // TODO(spike-1): notificationManager.setAutomaticZenRuleState(ruleId, condition)
-        Log.d(TAG, "deactivate($modeId) -> stub; ruleId=$ruleId condition=$condition")
-    }
+            if (stored.matches(desired)) return@guarded existingId
+
+            val updated = notificationManager.updateAutomaticZenRule(existingId, desired)
+            if (!updated) {
+                // Once a user edits a rule in Settings the platform may refuse
+                // further app updates to it. That is not an error and must not be
+                // retried in a loop: log what the system actually holds, keep the
+                // id, and let the UI show a "managed in system settings" badge.
+                Log.w(
+                    TAG,
+                    "updateAutomaticZenRule($existingId) refused for ${mode.id} — rule looks " +
+                        "user-managed; system holds " + describe(notificationManager.getAutomaticZenRule(existingId)),
+                )
+            }
+            existingId
+        }
+
+    override fun activate(modeId: String, source: ActivationSource): Boolean =
+        setState(modeId, Condition.STATE_TRUE, source)
+
+    override fun deactivate(modeId: String, source: ActivationSource): Boolean =
+        setState(modeId, Condition.STATE_FALSE, source)
 
     override fun readBack(modeId: String): ZenRuleSnapshot? {
         val ruleId = ruleIdFor(modeId) ?: return null
-        // TODO(spike-1): guard on isNotificationPolicyAccessGranted and wrap in
-        //  runCatching — OEM builds have been seen to throw here.
-        //    val rule = notificationManager.getAutomaticZenRule(ruleId)
-        //    val state = notificationManager.getAutomaticZenRuleState(ruleId)
-        //    return ZenRuleSnapshot(
-        //        ruleId = ruleId,
-        //        exists = rule != null,
-        //        enabled = rule?.isEnabled == true,
-        //        active = state == Condition.STATE_TRUE,
-        //    )
-        return ZenRuleSnapshot(ruleId = ruleId, exists = false, enabled = false, active = false)
+        return guarded("readBack($modeId)", fallback = null) {
+            val rule = notificationManager.getAutomaticZenRule(ruleId)
+            val state = notificationManager.getAutomaticZenRuleState(ruleId)
+            ZenRuleSnapshot(
+                ruleId = ruleId,
+                exists = rule != null,
+                enabled = rule?.isEnabled == true,
+                active = state == Condition.STATE_TRUE,
+            )
+        }
+    }
+
+    /**
+     * True when this process drove [ruleId] within the last few seconds, i.e. the
+     * status broadcast we are looking at is our own echo rather than a user acting
+     * on a system surface.
+     *
+     * Deliberately not consuming: one write can produce more than one broadcast,
+     * and the worst case of a false positive is one skipped (idempotent) reconcile.
+     */
+    fun wasSelfInitiated(ruleId: String, withinMillis: Long = SELF_ECHO_WINDOW_MS): Boolean {
+        val writtenAt = selfInitiated[ruleId] ?: return false
+        val age = SystemClock.elapsedRealtime() - writtenAt
+        if (age > withinMillis) {
+            selfInitiated.remove(ruleId)
+            return false
+        }
+        return true
+    }
+
+    private fun addRule(mode: FocusMode, rule: AutomaticZenRule): String? {
+        val id = notificationManager.addAutomaticZenRule(rule)
+        Log.i(TAG, "addAutomaticZenRule -> $id for mode ${mode.id}")
+        onRuleIdResolved(mode.id, id)
+        return id
+    }
+
+    /**
+     * Report a [Condition] for [modeId]'s rule and return what the system says
+     * afterwards.
+     *
+     * The read-back is not paranoia: a `SOURCE_SCHEDULE` activation is a no-op
+     * while the rule is snoozed, and the call does not fail — it just does nothing.
+     */
+    private fun setState(modeId: String, state: Int, source: ActivationSource): Boolean {
+        val ruleId = ruleIdFor(modeId) ?: return false
+        return guarded("setState($modeId -> ${state.stateName}, $source)", fallback = false) {
+            // Marked *before* the call: the status broadcast can land on another
+            // thread within ~50 ms and must find the marker already there.
+            selfInitiated[ruleId] = SystemClock.elapsedRealtime()
+            notificationManager.setAutomaticZenRuleState(
+                ruleId,
+                conditionFor(modeId, state, source),
+            )
+            val observed = notificationManager.getAutomaticZenRuleState(ruleId)
+            val agreed = observed == state
+            if (!agreed) {
+                Log.w(
+                    TAG,
+                    "asked for ${state.stateName} on $modeId via $source but the system reports " +
+                        "${observed.stateName} — expected when the user snoozed the rule and the " +
+                        "source is not SOURCE_USER_ACTION",
+                )
+            } else {
+                Log.d(TAG, "$modeId -> ${state.stateName} confirmed (source=$source)")
+            }
+            agreed
+        }
     }
 
     /**
@@ -108,6 +181,9 @@ class SystemZenAdapter(
             .allowCalls(mode.callsFrom.toZenPeopleType())
             .allowMessages(mode.messagesFrom.toZenPeopleType())
             .allowRepeatCallers(mode.repeatCallers)
+            // Channels the user marked as priority keep breaking through; that is
+            // the user's own escape hatch and the app must not take it away.
+            .allowPriorityChannels(true)
             .allowAlarms(true)
             .allowMedia(true)
             .build()
@@ -119,12 +195,18 @@ class SystemZenAdapter(
             .build()
 
         return AutomaticZenRule.Builder(mode.name, conditionIdFor(mode.id))
+            // Required: addAutomaticZenRule rejects a rule with no owner. The modern
+            // owner is a configuration activity handling ACTION_AUTOMATIC_ZEN_RULE
+            // (spike #1 confirmed the system routes rule configuration back to it).
+            .setConfigurationActivity(
+                ComponentName(context, ZenRuleConfigActivity::class.java),
+            )
             .setType(AutomaticZenRule.TYPE_IMMERSIVE)
             .setZenPolicy(policy)
             .setDeviceEffects(effects)
             .setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
             .setManualInvocationAllowed(true)
-            // TODO(skeleton): derive per-mode copy from its schedule
+            // TODO(core-live): derive per-mode copy from its schedule
             //  ("Weekdays 9:00-17:00") instead of one static string.
             .setTriggerDescription(context.getString(R.string.zen_trigger_description))
             .setEnabled(true)
@@ -157,9 +239,91 @@ class SystemZenAdapter(
             if (it == null) Log.w(TAG, "no cached rule id for mode $modeId; ensureRule first")
         }
 
+    /**
+     * Run a platform call, or degrade to [fallback] with a log.
+     *
+     * `SecurityException` is the documented failure when DND access is missing, and
+     * it can appear *between* a granted check and the call (the user can revoke the
+     * grant from the shade). The broader `RuntimeException` arm exists because OEM
+     * notification stacks have been observed to throw from these reads; a receiver
+     * crash-looping on every zen broadcast would be far worse than a stale state.
+     */
+    private inline fun <T> guarded(operation: String, fallback: T, block: () -> T): T {
+        if (!notificationManager.isNotificationPolicyAccessGranted) {
+            Log.w(TAG, "$operation skipped: no DND access")
+            return fallback
+        }
+        return try {
+            block()
+        } catch (e: SecurityException) {
+            Log.w(TAG, "$operation refused: DND access lost (${e.message})")
+            fallback
+        } catch (e: RuntimeException) {
+            Log.e(TAG, "$operation failed on this platform build", e)
+            fallback
+        }
+    }
+
+    /**
+     * Whether the stored rule already says what we want it to say.
+     *
+     * `AutomaticZenRule.equals` is useless here: it compares `creationTime` and the
+     * owning package, both filled in by the system, so a freshly built rule never
+     * equals a stored one. Comparing only the fields the app owns keeps reconcile
+     * from writing to the system config on every single wake.
+     */
+    private fun AutomaticZenRule.matches(desired: AutomaticZenRule): Boolean =
+        name == desired.name &&
+            isEnabled == desired.isEnabled &&
+            interruptionFilter == desired.interruptionFilter &&
+            type == desired.type &&
+            conditionId == desired.conditionId &&
+            configurationActivity == desired.configurationActivity &&
+            isManualInvocationAllowed == desired.isManualInvocationAllowed &&
+            triggerDescription == desired.triggerDescription &&
+            deviceEffects == desired.deviceEffects &&
+            zenPolicy.matchesPeoplePolicy(desired.zenPolicy)
+
+    /**
+     * Compare only the policy fields this app sets.
+     *
+     * The system fills the rest in from its own defaults, so a whole-object
+     * comparison would report drift forever and re-write the rule on every wake.
+     */
+    private fun ZenPolicy?.matchesPeoplePolicy(desired: ZenPolicy?): Boolean {
+        if (this == null || desired == null) return this == desired
+        return priorityCallSenders == desired.priorityCallSenders &&
+            priorityMessageSenders == desired.priorityMessageSenders &&
+            priorityCategoryRepeatCallers == desired.priorityCategoryRepeatCallers &&
+            priorityChannelsAllowed == desired.priorityChannelsAllowed
+    }
+
+    private fun describe(rule: AutomaticZenRule?): String = when (rule) {
+        null -> "nothing (rule gone)"
+        else -> "name=${rule.name} enabled=${rule.isEnabled} filter=${rule.interruptionFilter} " +
+            "effects=[grayscale=${rule.deviceEffects?.shouldDisplayGrayscale()} " +
+            "dim=${rule.deviceEffects?.shouldDimWallpaper()} " +
+            "night=${rule.deviceEffects?.shouldUseNightMode()}]"
+    }
+
+    private val Int.stateName: String
+        get() = when (this) {
+            Condition.STATE_TRUE -> "STATE_TRUE"
+            Condition.STATE_FALSE -> "STATE_FALSE"
+            Condition.STATE_ERROR -> "STATE_ERROR"
+            else -> "STATE_UNKNOWN($this)"
+        }
+
     private companion object {
         const val TAG = "SystemZenAdapter"
         const val CONDITION_PATH = "mode"
+
+        /**
+         * How long a write of ours counts as explaining an incoming status broadcast.
+         * Measured delivery on the 17T Pro is ~50 ms; 5 s is slack for a busy device,
+         * still far shorter than any plausible user interaction with Settings.
+         */
+        const val SELF_ECHO_WINDOW_MS = 5_000L
     }
 }
 
@@ -180,7 +344,8 @@ internal fun PeopleFilter.toZenPeopleType(): Int = when (this) {
  * Domain source to `Condition.SOURCE_*`.
  *
  * This is the whole reason [ActivationSource] is threaded through every adapter
- * call: the system's Modes UI reports *why* the phone is quiet from this field.
+ * call: the system's Modes UI reports *why* the phone is quiet from this field, and
+ * only `SOURCE_USER_ACTION` is allowed to override a user's snooze.
  */
 internal fun ActivationSource.toConditionSource(): Int = when (this) {
     ActivationSource.USER -> Condition.SOURCE_USER_ACTION

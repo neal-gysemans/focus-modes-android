@@ -43,23 +43,43 @@ class AlarmScheduler(
             return
         }
 
-        // TODO(skeleton): guard on alarmManager.canScheduleExactAlarms() — see
-        //  health/PermissionHealth — and fall back to setAndAllowWhileIdle with a
-        //  window when the grant is missing, rather than throwing.
-        //    alarmManager.setExactAndAllowWhileIdle(
-        //        AlarmManager.RTC_WAKEUP,
-        //        next.toInstant().toEpochMilli(),
-        //        pendingIntent(),
-        //    )
-        //  setExactAndAllowWhileIdle, not setExact: the interesting boundaries are
-        //  at 23:00 and 07:00 when the device is deep in doze.
-        Log.d(TAG, "rearm -> stub; next boundary at $next")
+        val triggerAtMillis = next.toInstant().toEpochMilli()
+        val pendingIntent = pendingIntent()
+
+        // setExactAndAllowWhileIdle, not setExact: the interesting boundaries are at
+        // 23:00 and 07:00, when the device is deep in doze.
+        if (alarmManager.canScheduleExactAlarms()) {
+            try {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtMillis,
+                    pendingIntent,
+                )
+                Log.d(TAG, "armed exact boundary at $next")
+                return
+            } catch (e: SecurityException) {
+                // The grant can be revoked between the check and the call.
+                Log.w(TAG, "exact alarm refused; falling back to inexact: ${e.message}")
+            }
+        }
+
+        // Fallback without the "Alarms & reminders" grant. setAndAllowWhileIdle
+        // rather than setWindow: an inexact windowed alarm is deferred to the next
+        // doze maintenance window, which for a 23:00 bedtime boundary can be hours,
+        // whereas setAndAllowWhileIdle still fires in doze (rate-limited to roughly
+        // once every 9-15 minutes per app — fine for a nudge to recompute).
+        alarmManager.setAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            triggerAtMillis,
+            pendingIntent,
+        )
+        Log.i(TAG, "armed inexact boundary at $next (no exact-alarm grant; expect drift)")
     }
 
     /** Drop the pending alarm, e.g. when the user disables every schedule. */
     fun cancel() {
-        // TODO(skeleton): alarmManager.cancel(pendingIntent())
-        Log.d(TAG, "cancel -> stub")
+        alarmManager.cancel(pendingIntent())
+        Log.d(TAG, "cancelled the pending boundary alarm")
     }
 
     private fun pendingIntent(): PendingIntent = PendingIntent.getBroadcast(

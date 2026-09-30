@@ -37,6 +37,18 @@
         <intent>
             <action android:name="android.settings.NOTIFICATION_POLICY_ACCESS_SETTINGS" />
         </intent>
+        <!-- Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM: without these declarations the
+             exact-alarm health check reports its own "Fix this" button as unreachable.
+             Two entries because the per-app screen ("package:" data) and the plain
+             "Alarms & reminders" list are different Settings activities, and the
+             visibility probe has to match each one's filter. -->
+        <intent>
+            <action android:name="android.settings.REQUEST_SCHEDULE_EXACT_ALARM" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.REQUEST_SCHEDULE_EXACT_ALARM" />
+            <data android:scheme="package" />
+        </intent>
     </queries>
 
     <application
@@ -82,10 +94,58 @@
                 android:value="true" />
         </service>
 
-        <!-- Fires on the next schedule boundary; carries no payload, just "recompute". -->
+        <!--
+          Owner of every AutomaticZenRule this app creates. addAutomaticZenRule
+          rejects a rule with no owner, and the modern owner is an exported activity
+          handling ACTION_AUTOMATIC_ZEN_RULE with the ruleType meta-data — so all
+          three attributes below are load-bearing, not boilerplate.
+          ruleInstanceLimit is deliberately omitted: omitting it means "unlimited",
+          and the user may define as many modes as they like.
+        -->
+        <activity
+            android:name=".zen.ZenRuleConfigActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/core_zen_rule_config_label"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.app.action.AUTOMATIC_ZEN_RULE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.zen.automatic.ruleType"
+                android:value="@string/core_zen_rule_type" />
+        </activity>
+
+        <!--
+          Learns that a human turned one of our modes on or off from a system
+          surface. Declared here so a status change can wake a dead process; the
+          Application also registers the same receiver at runtime, because HyperOS
+          broadcast delivery to manifest receivers could not be proven from code
+          alone. Both paths are idempotent, so double delivery is harmless.
+        -->
+        <receiver
+            android:name=".zen.ZenStatusReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.app.action.AUTOMATIC_ZEN_RULE_STATUS_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+          Fires on the next schedule boundary; carries no payload, just "recompute".
+          The intent-filter is for a different signal: revoking the exact-alarm grant
+          deletes every alarm we set, so when the user grants it again we have to
+          re-arm. That broadcast is documented to reach manifest receivers.
+        -->
         <receiver
             android:name=".schedule.ScheduleAlarmReceiver"
-            android:exported="false" />
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Reconcile after a reboot or an app update; both wipe armed alarms. -->
         <receiver
