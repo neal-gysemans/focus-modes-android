@@ -58,6 +58,20 @@ interface TriggerDao {
     @Query("SELECT * FROM triggers WHERE mode_id = :modeId")
     suspend fun getTriggersForMode(modeId: String): List<TriggerEntity>
 
+    /**
+     * Every schedule row, **enabled or not**, for the editor.
+     *
+     * Disabled rows are the point: the seeded Work and Sleep schedules ship switched
+     * off, and [observeEnabledTriggers] would hide the very thing the user has to be
+     * able to find in order to switch them on. The editor also needs other modes'
+     * schedules to spot overlaps, so this is not filtered by mode either.
+     *
+     * The literal `'SCHEDULE'` matches how [Converters] stores the enum — by name, not
+     * ordinal — so this query survives anyone reordering [TriggerType].
+     */
+    @Query("SELECT * FROM triggers WHERE type = 'SCHEDULE' ORDER BY mode_id ASC, id ASC")
+    fun observeSchedules(): Flow<List<TriggerEntity>>
+
     @Upsert
     suspend fun upsert(trigger: TriggerEntity)
 

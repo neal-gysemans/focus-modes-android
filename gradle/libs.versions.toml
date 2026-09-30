@@ -22,6 +22,11 @@ datastore = "1.2.1"
 coroutines = "1.11.0"
 
 junit = "4.13.2"
+# Test-only. android.jar ships org.json as throwing stubs, so the JVM unit tests
+# cannot exercise the real params_json decoder without a working implementation
+# on the test classpath. Never an `implementation` dependency — on device the
+# platform's own org.json is the one that runs.
+json = "20260814"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -48,6 +53,7 @@ kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-c
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 
 junit = { module = "junit:junit", version.ref = "junit" }
+json = { module = "org.json:json", version.ref = "json" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
