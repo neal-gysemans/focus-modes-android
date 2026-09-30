@@ -20,6 +20,7 @@ import be.nealgysemans.focusmodes.engine.Direction
 import be.nealgysemans.focusmodes.engine.TriggerEvent
 import be.nealgysemans.focusmodes.notification.SurfaceSync
 import be.nealgysemans.focusmodes.tile.FocusTileService
+import be.nealgysemans.focusmodes.tile.TapBehavior
 import be.nealgysemans.focusmodes.tile.TileNudge
 import be.nealgysemans.focusmodes.tile.TilePreferences
 import be.nealgysemans.focusmodes.tile.TileStateCache
@@ -69,7 +70,7 @@ class MainActivity : ComponentActivity() {
                     actions = ModeListActions(
                         onToggle = ::toggle,
                         onSaveMode = ::saveMode,
-                        onAlwaysAskChange = ::setAlwaysAsk,
+                        onTapBehaviorChange = ::setTapBehavior,
                         onAddTile = ::requestAddTile,
                         onRequestNotifications = ::requestNotificationPermission,
                         onOpenSettings = ::openSettings,
@@ -126,8 +127,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun setAlwaysAsk(alwaysAsk: Boolean) {
-        lifecycleScope.launch(Dispatchers.IO) { tilePreferences.setAlwaysAsk(alwaysAsk) }
+    private fun setTapBehavior(behaviour: TapBehavior) {
+        lifecycleScope.launch(Dispatchers.IO) { tilePreferences.setTapBehavior(behaviour) }
     }
 
     // ---------------------------------------------------------------------- platform

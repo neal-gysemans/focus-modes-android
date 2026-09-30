@@ -21,6 +21,40 @@ data class TileMode(
 )
 
 /**
+ * What a plain tap on the Quick Settings tile does.
+ *
+ * Replaces the earlier `alwaysAsk` boolean. It was a boolean because there were two
+ * answers; daily use produced a third — cycling, which the spike tile had and which
+ * the shipped tile lost — and "cycle" is not a shade of "ask", so the type had to grow
+ * rather than gain a second flag. Persisted by [name] (see `TilePreferences`), never by
+ * ordinal: reordering these constants must not silently change a user's setting.
+ */
+enum class TapBehavior {
+
+    /** Re-activate [TileSnapshot.lastUsedModeId]. The iOS Control Center behaviour. */
+    LAST_USED,
+
+    /** Always open the picker, for users who never want an implicit choice made. */
+    ALWAYS_ASK,
+
+    /**
+     * Step through the modes in sort order: off → first → next → … → last → off.
+     *
+     * One tap per step and never a dialog, which is what makes a two-or-three-mode
+     * setup usable from a shade the user is already halfway through closing.
+     */
+    CYCLE,
+    ;
+
+    companion object {
+
+        /** The behaviour named [name], or [LAST_USED] for anything unrecognised. */
+        fun ofName(name: String?): TapBehavior =
+            entries.firstOrNull { it.name == name } ?: LAST_USED
+    }
+}
+
+/**
  * Everything the Quick Settings tile needs to render and to decide what a tap means,
  * in one immutable value.
  *
@@ -33,10 +67,11 @@ data class TileMode(
  * Being pure Kotlin also makes [tap] unit-testable on the JVM, which matters because
  * "which mode does a tap turn on" is policy, not plumbing.
  *
+ * @property modes every defined mode, already in the user's sort order — which is
+ *   what makes [TapBehavior.CYCLE] deterministic and what the widget's grid draws.
  * @property lastUsedModeId the mode an off-tap turns on. Persisted by
  *   [TilePreferences], updated whenever any surface activates a mode.
- * @property alwaysAsk user preference: tap always opens the picker instead of
- *   re-activating [lastUsedModeId].
+ * @property tapBehavior user preference: what a plain tap means.
  * @property dndGranted notification policy access. False makes the tile
  *   `STATE_UNAVAILABLE` rather than letting it claim to arm something it cannot.
  * @property activeSince epoch millis of the current activation, for the ongoing
@@ -47,7 +82,7 @@ data class TileSnapshot(
     val activeModeId: String? = null,
     val activeSince: Long = 0L,
     val lastUsedModeId: String? = null,
-    val alwaysAsk: Boolean = false,
+    val tapBehavior: TapBehavior = TapBehavior.LAST_USED,
     val dndGranted: Boolean = false,
 ) {
     /** The active mode, or null when idle *or* when the active id names a deleted mode. */
@@ -83,23 +118,62 @@ sealed interface TileTap {
 /**
  * Resolve a tap against this snapshot.
  *
- * Priority, in order:
- *  1. Nothing to do at all (no grant, no modes) → [TileTap.Blocked].
- *  2. Something is on → turn *that* off. An on-tile always means "off"; a tile that
- *     sometimes switched modes on a plain tap would be unpredictable.
- *  3. The user asked to always be asked → [TileTap.Ask].
- *  4. A last-used mode exists → re-activate it. This is the iOS Control Center
- *     behaviour: the common tap costs one touch, not two.
- *  5. Exactly one mode exists → no point asking.
- *  6. Otherwise → [TileTap.Ask].
+ * Nothing to do at all (no grant, no modes) is [TileTap.Blocked] whatever the
+ * preference says; past that the answer is [TapBehavior]'s, and the three branches are
+ * deliberately different shapes rather than one parameterised rule:
+ *
+ *  - [TapBehavior.CYCLE] is the only one where a tap on an *on* tile can turn something
+ *    else on, so it owns the whole decision (see [cycleTap]).
+ *  - [TapBehavior.ALWAYS_ASK] and [TapBehavior.LAST_USED] share "on means off": a tile
+ *    that sometimes switched modes on a plain tap would be unpredictable, and making the
+ *    picker the only way off would cost two taps to undo one.
+ *  - Past that, ask-always asks; last-used re-activates, which is the iOS Control Center
+ *    behaviour — the common tap costs one touch, not two — and falls back to asking when
+ *    there is no last-used mode left to re-activate (unless there is only one mode, in
+ *    which case there is nothing to ask about).
  */
 fun TileSnapshot.tap(): TileTap {
     if (!dndGranted || modes.isEmpty()) return TileTap.Blocked
+    if (tapBehavior == TapBehavior.CYCLE) return cycleTap()
     activeMode?.let { return TileTap.Deactivate(it.id) }
-    if (alwaysAsk) return TileTap.Ask
+    if (tapBehavior == TapBehavior.ALWAYS_ASK) return TileTap.Ask
     lastUsedMode?.let { return TileTap.Activate(it.id) }
     return modes.singleOrNull()?.let { TileTap.Activate(it.id) } ?: TileTap.Ask
 }
+
+/**
+ * One step of `off → first → next → … → last → off`, in [TileSnapshot.modes] order.
+ *
+ * `modes` arrives sorted by the user's `sort_order` (see `ModeDao.observeModes`), so
+ * "next" means next in the list the user sees in the app — not next by id, and not
+ * whatever order Room happened to return.
+ *
+ * Off is a real stop on the ring, not an escape hatch: without it a cycling tile could
+ * never be turned off in one tap, which is the one thing every tile must be able to do.
+ * [lastUsedModeId] is deliberately ignored — a cycle that started from wherever the user
+ * last was would not be a cycle.
+ */
+private fun TileSnapshot.cycleTap(): TileTap {
+    // An activeModeId naming a deleted mode is *off* for cycling purposes: the engine
+    // would ignore a deactivate of it as UNKNOWN_MODE, so the ring restarts instead.
+    val index = modes.indexOfFirst { it.id == activeModeId }
+    if (index < 0) return TileTap.Activate(modes.first().id)
+    val next = modes.getOrNull(index + 1) ?: return TileTap.Deactivate(modes[index].id)
+    return TileTap.Activate(next.id)
+}
+
+/**
+ * What the home-screen widget's single "current Focus" button does: off ↔ last used.
+ *
+ * Deliberately **not** [tap]: [TapBehavior] is the *tile's* preference, chosen for a
+ * control in a shade the user is halfway through closing. The widget is a different
+ * control on a different surface — it already shows one named mode and, at its wider
+ * sizes, a button per mode — so cycling or a dialog there would be surprising rather
+ * than helpful. Expressed as a delegation rather than a copy so the branch the widget
+ * takes is provably the same one the tile's last-used setting takes, including
+ * [TileTap.Blocked] and the "nothing left to re-activate" fallback to [TileTap.Ask].
+ */
+fun TileSnapshot.toggleLastUsed(): TileTap = copy(tapBehavior = TapBehavior.LAST_USED).tap()
 
 /**
  * Process-wide warm copy of [TileSnapshot], and the tile's render source.

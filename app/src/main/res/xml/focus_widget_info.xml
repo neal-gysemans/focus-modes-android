@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Provider metadata for widget/FocusWidget.
+
+  targetCellWidth/Height (API 31+) rather than only minWidth/minHeight: the launcher
+  places the widget at 2x1 cells, which is the iPhone Focus widget's footprint and the
+  size the single "current Focus" button is designed for. The min* values are the floor
+  the user can shrink to; the max* values stop a resize from stretching a handful of
+  buttons across a whole screen.
+
+  resizeMode is both axes because the layout genuinely changes with both (see
+  SizeMode.Responsive in FocusWidget): wider gives a button per mode, taller gives a grid.
+
+  initialLayout is Glance's own loading layout — the frame the host shows between placing
+  the widget and the first composition landing. previewLayout is what the widget picker
+  draws; a static approximation of the small size is enough there, and unlike a
+  previewImage bitmap it follows the device's light/dark setting.
+
+  updatePeriodMillis is deliberately absent (i.e. 0): nothing about this widget is
+  time-based, and every real change already arrives through notification/SurfaceSync.
+  A polling interval would only cost battery to re-render identical RemoteViews.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minHeight="40dp"
+    android:minResizeHeight="40dp"
+    android:minResizeWidth="110dp"
+    android:minWidth="110dp"
+    android:maxResizeHeight="300dp"
+    android:maxResizeWidth="360dp"
+    android:previewLayout="@layout/widget_focus_preview"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellHeight="1"
+    android:targetCellWidth="2"
+    android:widgetCategory="home_screen" />

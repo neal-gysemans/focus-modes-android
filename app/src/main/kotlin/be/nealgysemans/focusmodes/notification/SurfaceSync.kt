@@ -8,6 +8,7 @@ import be.nealgysemans.focusmodes.tile.TilePreferences
 import be.nealgysemans.focusmodes.tile.TileSnapshot
 import be.nealgysemans.focusmodes.tile.TileSnapshotSource
 import be.nealgysemans.focusmodes.tile.TileStateCache
+import be.nealgysemans.focusmodes.widget.FocusWidget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -17,28 +18,33 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * The one observer that keeps every surface honest.
  *
- * The problem it solves: five things can change which mode is on (the tile, the tile's
- * picker, the long-press grid, the app's switches, a schedule boundary) and three
- * surfaces have to reflect it (the tile, the ongoing notification, the UI). Wiring each
- * writer to each surface is fifteen edges and a guaranteed drift bug. Instead every
- * writer goes through `ModeEngine`, the engine's result lands in Room / DataStore, and
- * this collector fans *one* derived snapshot back out:
+ * The problem it solves: six things can change which mode is on (the tile, the tile's
+ * picker, the long-press grid, the app's switches, the home-screen widget, a schedule
+ * boundary) and four surfaces have to reflect it (the tile, the ongoing notification, the
+ * widget, the UI). Wiring each writer to each surface is two dozen edges and a guaranteed
+ * drift bug. Instead every writer goes through `ModeEngine`, the engine's result lands in
+ * Room / DataStore, and this collector fans *one* derived snapshot back out:
  *
  *  - refreshes [TileStateCache], so the tile's click path is warm without doing I/O;
  *  - nudges the tile via [TileNudge], because an `ACTIVE_TILE` only repaints when asked;
+ *  - updates every placed home-screen widget via [FocusWidget.refreshAll], because a
+ *    widget whose Glance session has been torn down is likewise not watching anything;
  *  - posts or clears the ongoing notification through [StatusNotifier];
  *  - records the active mode as "last used", so an off-tap on the tile knows what to
  *    turn on next — including when the mode was turned on from somewhere else.
  *
  * The UI needs nothing from here: Compose collects the same Room and DataStore flows
- * directly.
+ * directly. Nor does a widget with a *live* session, which collects them too — the
+ * refresh below is for the far more common case of one that does not.
  *
  * ## Why it is started by hand
  *
  * It must be running in whichever process handled the change, so [start] is called
- * from every surface entry point in this module: the tile service, both activities, and
- * the notification's "Turn off" receiver. It is idempotent and cheap, so calling it on
- * every entry is the safe default rather than something to be careful about.
+ * from every surface entry point: the tile service, both activities, the notification's
+ * "Turn off" receiver, and the widget — from both its render (`provideGlance`) and its
+ * tap (`ToggleModeAction`), because either can be the thing that starts the process. It
+ * is idempotent and cheap, so calling it on every entry is the safe default rather than
+ * something to be careful about.
  *
  * A single call from `FocusModesApplication.onCreate` (or from `AppGraph`'s
  * post-transition hook) would also cover the schedule-alarm and boot paths in a cold
@@ -88,6 +94,11 @@ object SurfaceSync {
     ) {
         TileStateCache.publish(snapshot)
         TileNudge.refresh(app)
+        // Before the notification, deliberately: the widget is on screen the moment the
+        // user looks at the home screen, while the notification is behind a shade pull.
+        // `refreshAll` swallows its own failures, so a launcher that refuses an update
+        // cannot stop the rest of this fan-out.
+        FocusWidget.refreshAll(app)
 
         val active = snapshot.activeMode
         if (active == null) {

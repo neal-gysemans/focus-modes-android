@@ -19,6 +19,9 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,6 +47,7 @@ import be.nealgysemans.focusmodes.engine.TriggerEvent
 import be.nealgysemans.focusmodes.health.Grant
 import be.nealgysemans.focusmodes.health.HealthCheck
 import be.nealgysemans.focusmodes.health.PermissionHealth
+import be.nealgysemans.focusmodes.tile.TapBehavior
 import be.nealgysemans.focusmodes.tile.TilePrefs
 import kotlinx.coroutines.flow.Flow
 
@@ -60,8 +64,8 @@ class ModeListActions(
     val onToggle: (TriggerEvent) -> Unit,
     /** Persist an edited mode, invalidate the engine's snapshot, repaint the tile. */
     val onSaveMode: (ModeEntity) -> Unit,
-    /** Store the tile's "always ask" preference. */
-    val onAlwaysAskChange: (Boolean) -> Unit,
+    /** Store what a plain tap on the tile does. */
+    val onTapBehaviorChange: (TapBehavior) -> Unit,
     /** `StatusBarManager.requestAddTileService`. */
     val onAddTile: () -> Unit,
     /** Launch the `POST_NOTIFICATIONS` runtime request. */
@@ -138,8 +142,8 @@ fun ModeListScreen(
 
             item {
                 TileCard(
-                    alwaysAsk = prefs.alwaysAsk,
-                    onAlwaysAskChange = actions.onAlwaysAskChange,
+                    tapBehavior = prefs.tapBehavior,
+                    onTapBehaviorChange = actions.onTapBehaviorChange,
                     onAddTile = actions.onAddTile,
                 )
             }
@@ -230,8 +234,8 @@ private fun ModeRow(
  */
 @Composable
 private fun TileCard(
-    alwaysAsk: Boolean,
-    onAlwaysAskChange: (Boolean) -> Unit,
+    tapBehavior: TapBehavior,
+    onTapBehaviorChange: (TapBehavior) -> Unit,
     onAddTile: () -> Unit,
 ) {
     Card(Modifier.fillMaxWidth()) {
@@ -246,24 +250,74 @@ private fun TileCard(
             Button(onClick = onAddTile) {
                 Text(stringResource(R.string.action_add_tile))
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.always_ask_title),
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    Text(
-                        text = stringResource(R.string.always_ask_summary),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                Switch(checked = alwaysAsk, onCheckedChange = onAlwaysAskChange)
-            }
+            TapBehaviorPicker(selected = tapBehavior, onSelect = onTapBehaviorChange)
         }
     }
 }
+
+/**
+ * The three things a tile tap can mean, as one segmented control.
+ *
+ * This was a switch while the setting was a boolean. A segmented row rather than a
+ * dropdown or three radio rows because all three options have to be readable at once —
+ * the user is choosing between behaviours they cannot see until they next pull the shade
+ * down, and a collapsed control that shows only the current value makes that choice
+ * blind. The summary under it describes the *selected* option rather than listing all
+ * three, so the card does not grow every time an option is added.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TapBehaviorPicker(
+    selected: TapBehavior,
+    onSelect: (TapBehavior) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = stringResource(R.string.tap_behavior_title),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            TapBehavior.entries.forEachIndexed { index, behaviour ->
+                SegmentedButton(
+                    selected = behaviour == selected,
+                    onClick = { onSelect(behaviour) },
+                    shape = SegmentedButtonDefaults.itemShape(
+                        index = index,
+                        count = TapBehavior.entries.size,
+                    ),
+                    label = {
+                        Text(
+                            text = stringResource(behaviour.labelRes),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                )
+            }
+        }
+        Text(
+            text = stringResource(selected.summaryRes),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Short label for the segmented control. Kept to one word where the language allows. */
+private val TapBehavior.labelRes: Int
+    get() = when (this) {
+        TapBehavior.LAST_USED -> R.string.tap_behavior_last_used
+        TapBehavior.ALWAYS_ASK -> R.string.tap_behavior_always_ask
+        TapBehavior.CYCLE -> R.string.tap_behavior_cycle
+    }
+
+/** What the selected behaviour actually does, in a sentence. */
+private val TapBehavior.summaryRes: Int
+    get() = when (this) {
+        TapBehavior.LAST_USED -> R.string.tap_behavior_last_used_summary
+        TapBehavior.ALWAYS_ASK -> R.string.tap_behavior_always_ask_summary
+        TapBehavior.CYCLE -> R.string.tap_behavior_cycle_summary
+    }
 
 /**
  * One missing grant, with the button that fixes it.

@@ -183,6 +183,33 @@
             android:name=".notification.TurnOffReceiver"
             android:exported="false" />
 
+        <!--
+          The home-screen widget (widget/FocusWidget, via Glance).
+
+          exported=true is not optional: an AppWidgetProvider is invoked by the launcher,
+          which is a different app, so a non-exported provider is simply never offered in
+          the widget picker.
+
+          APPWIDGET_UPDATE is the only action declared here. Glance's own manifest
+          contributes the rest of the machinery — the action-callback receiver and the
+          click trampolines — through manifest merging, so nothing about taps needs to be
+          declared in this file.
+
+          The provider meta-data carries the sizing, the picker description and the
+          preview layout; see res/xml/focus_widget_info.xml.
+        -->
+        <receiver
+            android:name=".widget.FocusWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/focus_widget_info" />
+        </receiver>
+
     </application>
 
 </manifest>

@@ -140,6 +140,10 @@ class FocusTileService : TileService() {
             return
         }
         when (val tap = snapshot.tap()) {
+            // Under TapBehavior.CYCLE an Activate can arrive while another mode is on,
+            // i.e. mean "switch". Nothing here has to change for that: the flip repaints
+            // to the new mode, and the engine's single-active rule takes the old one down
+            // as part of applying the activation.
             is TileTap.Activate -> {
                 flip(snapshot, tap.modeId)
                 // ---- HOT PATH ENDS ----

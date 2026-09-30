@@ -20,12 +20,11 @@ private val Context.tilePreferencesDataStore: DataStore<Preferences> by preferen
  * @property lastUsedModeId the mode the tile re-activates from off. Written whenever
  *   any surface activates a mode, so "last used" means last used anywhere — tile,
  *   app, picker or schedule — not last used *from the tile*.
- * @property alwaysAsk when true a tap opens the picker instead of re-activating
- *   [lastUsedModeId], for users who never want an implicit choice made for them.
+ * @property tapBehavior what a plain tap on the tile does.
  */
 data class TilePrefs(
     val lastUsedModeId: String? = null,
-    val alwaysAsk: Boolean = false,
+    val tapBehavior: TapBehavior = TapBehavior.LAST_USED,
 )
 
 /**
@@ -47,7 +46,7 @@ class TilePreferences(private val context: Context) {
     val flow: Flow<TilePrefs> = context.tilePreferencesDataStore.data.map { prefs ->
         TilePrefs(
             lastUsedModeId = prefs[KEY_LAST_USED_MODE_ID],
-            alwaysAsk = prefs[KEY_ALWAYS_ASK] ?: false,
+            tapBehavior = prefs.readTapBehavior(),
         )
     }
 
@@ -55,12 +54,51 @@ class TilePreferences(private val context: Context) {
         context.tilePreferencesDataStore.edit { it[KEY_LAST_USED_MODE_ID] = modeId }
     }
 
-    suspend fun setAlwaysAsk(alwaysAsk: Boolean) {
-        context.tilePreferencesDataStore.edit { it[KEY_ALWAYS_ASK] = alwaysAsk }
+    /**
+     * Store [behaviour] and retire the boolean it replaced.
+     *
+     * Removing the old key here rather than in a one-shot migration is what keeps
+     * [readTapBehavior] honest: once the user has expressed a three-way choice there must
+     * be no two-way value left behind that a future reader could prefer by mistake.
+     */
+    suspend fun setTapBehavior(behaviour: TapBehavior) {
+        context.tilePreferencesDataStore.edit { prefs ->
+            prefs[KEY_TAP_BEHAVIOR] = behaviour.name
+            prefs.remove(KEY_ALWAYS_ASK)
+        }
     }
+
+    private fun Preferences.readTapBehavior(): TapBehavior =
+        tapBehaviorFrom(this[KEY_TAP_BEHAVIOR], this[KEY_ALWAYS_ASK])
 
     private companion object {
         val KEY_LAST_USED_MODE_ID = stringPreferencesKey("last_used_mode_id")
+        val KEY_TAP_BEHAVIOR = stringPreferencesKey("tap_behavior")
+
+        /** Pre-`tap_behavior` setting. Read for migration, never written again. */
         val KEY_ALWAYS_ASK = booleanPreferencesKey("always_ask")
     }
+}
+
+/**
+ * Resolve the stored tap behaviour, migrating the `alwaysAsk` boolean it used to be.
+ *
+ * A read-time migration, not a write-time one: DataStore's `data` flow is collected by a
+ * `TileService`, a widget composition and the UI, and a migration that wrote on first
+ * read would have all of them racing to write the same value — and would emit a second
+ * time, which is a repaint for every surface. The derivation is cheap, total, and stops
+ * mattering the moment the user makes a real choice (which clears the old key).
+ *
+ * Pure and top-level so the rule is testable without a DataStore: this is the only place
+ * an upgrading user's setting can be silently changed, which makes it worth pinning down.
+ *
+ * @param storedName the `tap_behavior` name, or null on a store written before it existed.
+ * @param legacyAlwaysAsk the retired `always_ask` boolean, or null if it was never set.
+ */
+internal fun tapBehaviorFrom(storedName: String?, legacyAlwaysAsk: Boolean?): TapBehavior = when {
+    // A stored name always wins, even an unrecognised one — `ofName` maps that to the
+    // default rather than letting a stale boolean underneath it resurface.
+    storedName != null -> TapBehavior.ofName(storedName)
+    legacyAlwaysAsk == true -> TapBehavior.ALWAYS_ASK
+    else -> TapBehavior.LAST_USED
 }
