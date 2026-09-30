@@ -3,9 +3,14 @@
   What the widget picker draws.
 
   A static stand-in for the 2x1 layout that widget/FocusWidget composes: the same rounded
-  card, the same filled circular chip, the same name beside it. It is a hand-written
-  layout rather than a rendered bitmap so it follows the device's light/dark setting (the
-  colours below have a values-night variant) and stays sharp at any picker density.
+  card, the same filled circular chip, the same name beside it, and the same hairline and
+  chevron zone on the trailing edge. It is a hand-written layout rather than a rendered
+  bitmap so it follows the device's light/dark setting (the colours below have a
+  values-night variant) and stays sharp at any picker density.
+
+  The chevron is in here because it is the half of the control a new user has no other way
+  to discover: "tap the left to toggle, tap the right to choose" has to be visible in the
+  picker, or the second zone is a secret.
 
   Deliberately shows a mode as *on*: a picker preview of the off state would be a grey
   ring and the word "Focus", which tells the user nothing about what the widget does.
@@ -41,5 +46,20 @@
         android:textColor="@color/widget_preview_accent"
         android:textSize="15sp"
         android:textStyle="bold" />
+
+    <View
+        android:layout_width="1dp"
+        android:layout_height="match_parent"
+        android:layout_marginVertical="8dp"
+        android:background="@color/widget_preview_hairline" />
+
+    <ImageView
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="10dp"
+        android:contentDescription="@string/widget_choose_mode"
+        android:src="@drawable/ic_chevron_updown"
+        android:tint="@color/widget_preview_muted" />
 
 </LinearLayout>

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -35,16 +36,31 @@ import be.nealgysemans.focusmodes.R
 import be.nealgysemans.focusmodes.tile.TileMode
 
 /**
- * The picker, as a list of rows, for the dialog the Quick Settings tile shows.
+ * The picker, as a list of rows — the dialog the Quick Settings tile shows, and the card
+ * the home-screen widget's chevron opens.
  *
- * Rows rather than a grid here: the dialog sits inside the collapsed shade with the
+ * Rows rather than a grid here: the tile's dialog sits inside the collapsed shade with the
  * status bar and the user's thumb both in the way, and a vertical list of full-width
- * targets is the one layout that stays hittable there. The long-press surface, which
- * owns the whole screen, uses [ModeGrid] instead.
+ * targets is the one layout that stays hittable there. It is also the shape of iOS's own
+ * Focus selector, which is why `widget/FocusPickerActivity` reuses it rather than the
+ * grid. The long-press surface, which owns the whole screen, uses [ModeGrid] instead.
  *
  * Selecting a mode reports its id; selecting "Off" reports null. The caller decides
  * what that means — this composable never touches the engine, so the same body works
  * from a Service-hosted dialog and from an Activity.
+ *
+ * The three optional parameters are what the widget's picker adds and the tile's dialog
+ * deliberately does not, so that the tile's behaviour is unchanged by all of this:
+ *
+ * @param activeValueLabel mark the active row with a trailing "On" instead of a
+ *   checkmark. iOS labels the row that is on rather than ticking it — a value, not a
+ *   selection — and the word also says what tapping the row will undo.
+ * @param activeTapTurnsOff let a tap on the active row report null, i.e. turn it off.
+ *   Follows from [activeValueLabel]: a row that reads "On" has to be a switch. Without
+ *   this a tap on the active row reports its own id, which every caller treats as a
+ *   no-op re-activation.
+ * @param onOpenSettings the one row that is not a mode, pinned to the bottom. Null omits
+ *   it, which is what the tile's dialog wants — the tile has its own way into the app.
  */
 @Composable
 fun ModePickerSheet(
@@ -52,6 +68,9 @@ fun ModePickerSheet(
     activeModeId: String?,
     onPick: (String?) -> Unit,
     modifier: Modifier = Modifier,
+    activeValueLabel: Boolean = false,
+    activeTapTurnsOff: Boolean = false,
+    onOpenSettings: (() -> Unit)? = null,
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -66,12 +85,16 @@ fun ModePickerSheet(
             )
             Spacer(Modifier.size(12.dp))
             modes.forEach { mode ->
+                val selected = mode.id == activeModeId
                 PickerRow(
                     label = mode.name,
                     glyphRes = mode.glyphRes,
                     accent = Color(mode.color),
-                    selected = mode.id == activeModeId,
-                    onClick = { onPick(mode.id) },
+                    selected = selected,
+                    valueLabel = activeValueLabel,
+                    onClick = {
+                        onPick(if (selected && activeTapTurnsOff) null else mode.id)
+                    },
                 )
             }
             PickerRow(
@@ -79,8 +102,26 @@ fun ModePickerSheet(
                 glyphRes = ModeGlyphs.OFF_RES,
                 accent = MaterialTheme.colorScheme.onSurfaceVariant,
                 selected = activeModeId == null,
+                // Never the value label, even under [activeValueLabel]: "Off … On" is
+                // nonsense. This row is a selection, not a switch, so it keeps the tick.
+                valueLabel = false,
                 onClick = { onPick(null) },
             )
+            if (onOpenSettings != null) {
+                // A hairline above it, because this row leaves the picker and the ones
+                // above it commit inside it — without the seam it reads as a fifth mode.
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                )
+                PickerRow(
+                    label = stringResource(R.string.picker_settings),
+                    glyphRes = R.drawable.ic_settings,
+                    accent = MaterialTheme.colorScheme.onSurfaceVariant,
+                    selected = false,
+                    valueLabel = false,
+                    onClick = onOpenSettings,
+                )
+            }
         }
     }
 }
@@ -91,6 +132,7 @@ private fun PickerRow(
     glyphRes: Int,
     accent: Color,
     selected: Boolean,
+    valueLabel: Boolean,
     onClick: () -> Unit,
 ) {
     Row(
@@ -112,12 +154,20 @@ private fun PickerRow(
         )
         if (selected) {
             Spacer(Modifier.width(8.dp))
-            Icon(
-                painter = painterResource(R.drawable.ic_check),
-                contentDescription = stringResource(R.string.picker_selected),
-                tint = accent,
-                modifier = Modifier.size(20.dp),
-            )
+            if (valueLabel) {
+                Text(
+                    text = stringResource(R.string.picker_on),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Icon(
+                    painter = painterResource(R.drawable.ic_check),
+                    contentDescription = stringResource(R.string.picker_selected),
+                    tint = accent,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
     }
 }

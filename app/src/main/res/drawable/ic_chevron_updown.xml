@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The widget's "open the picker" affordance: two chevrons, one up and one down.
+
+  This is iOS's own visible affordance on the Control Center Focus control (shipped in
+  iOS 18.4, `chevron.up.chevron.down`), and it is the substitute this app uses for the
+  long-press-to-expand gesture that RemoteViews cannot offer at all. Stacked rather than
+  a single caret because a lone chevron reads as "this expands downwards"; a pair reads
+  as "this opens a chooser", which is what the zone actually does.
+
+  Two filled paths rather than strokes, matching every other glyph here — a stroked
+  vector on a RemoteViews ImageView is scaled by the host and hairlines drop out.
+
+  Deliberately *not* autoMirrored: an up/down pair has no handedness to mirror, and
+  mirroring it in RTL would only swap which end of each arm is thicker.
+
+  Never tinted in a mode's colour at the call site: the chevron belongs to the control,
+  not to the mode that happens to be on (see docs/widget-ios-spec.md).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+    <!--
+      Flat carets, roughly 3:1, with a gap between them as tall as a caret is.
+
+      The proportions are load-bearing, and were arrived at on the 17T Pro: at the 18dp
+      this renders at, a taller chevron with longer arms puts its four tips on the corners
+      of a hexagon and the pair reads as one diamond outline rather than as two chevrons.
+      Flatter and further apart is also what SF Symbols' own chevron.up.chevron.down does,
+      and presumably for the same reason.
+    -->
+    <!-- Up: apex at y=5, arms out and down to y=9.7. -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M7.2,7.8 L12,5 L16.8,7.8 L16.8,9.7 L12,6.9 L7.2,9.7 Z" />
+    <!-- Down: the same shape mirrored about y=12, so the pair is optically centred. -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M7.2,16.2 L12,19 L16.8,16.2 L16.8,14.3 L12,17.1 L7.2,14.3 Z" />
+</vector>

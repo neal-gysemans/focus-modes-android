@@ -11,4 +11,10 @@
     <color name="widget_preview_card">#FFFFFFFF</color>
     <!-- The seeded Work indigo, kept in step with ui/ModePalette's first entry. -->
     <color name="widget_preview_accent">#FF3D5AFE</color>
+    <!-- The seam between the two zones. The placed widget uses GlanceTheme's `outline`;
+         this is a literal standing in for it, at the alpha a hairline wants. -->
+    <color name="widget_preview_hairline">#33000000</color>
+    <!-- The chevron. Opaque, because ImageView#tint multiplies alpha and a 20% tint
+         would leave the one affordance the preview exists to show barely visible. -->
+    <color name="widget_preview_muted">#FF5F6368</color>
 </resources>

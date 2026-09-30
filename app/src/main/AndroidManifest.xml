@@ -112,6 +112,27 @@
         </activity>
 
         <!--
+          The home-screen widget's chevron target: the Focus selector as a centred card.
+
+          exported=false, unlike TilePrefsActivity above — nothing outside this app ever
+          names it. A Glance actionStartActivity click travels as a PendingIntent created
+          by this app's own process, so the launcher is only firing it, not resolving it,
+          and the component needs no export to be reachable that way.
+
+          excludeFromRecents + singleTop + Translucent for the same reasons the tile's
+          overlay has them: it is a momentary card over whatever is behind it, it must
+          never accumulate in recents, and a second chevron tap must not stack a second
+          copy on the first.
+        -->
+        <activity
+            android:name=".widget.FocusPickerActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:label="@string/widget_choose_mode"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.FocusModes.Translucent" />
+
+        <!--
           Quick Settings tile — the app's primary surface.
           ACTIVE_TILE: the app pushes updates via requestListeningState instead of
           only refreshing while the shade is open.

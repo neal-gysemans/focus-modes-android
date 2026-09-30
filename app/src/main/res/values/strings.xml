@@ -22,10 +22,17 @@
     <string name="notification_active_text">Tap to open Focus Modes.</string>
     <string name="notification_turn_off">Turn off</string>
 
-    <!-- Picker (tile dialog + long-press grid). -->
+    <!-- Picker (tile dialog + long-press grid + the widget's chevron target). -->
     <string name="picker_title">Focus</string>
     <string name="picker_off">Off</string>
     <string name="picker_selected">Selected</string>
+    <!-- Trailing value on the active row, in place of a checkmark. iOS's Focus selector
+         labels the on row rather than ticking it, and "On" also says what a tap will
+         undo — a checkmark says only that the row is the chosen one. -->
+    <string name="picker_on">On</string>
+    <!-- Bottom row of the widget's picker: the one entry that is not a mode. Collapses
+         iOS's "+" and its per-row Settings link into a single way into the app. -->
+    <string name="picker_settings">Focus settings</string>
 
     <string name="health_dnd_access_missing">Focus Modes needs Do Not Disturb access before it can turn a mode on. Grant it in Settings.</string>
     <string name="health_exact_alarm_missing">Without permission for exact alarms, scheduled modes can start and end minutes or hours late.</string>
@@ -53,9 +60,19 @@
     <string name="widget_description">Your current Focus, with one tap to turn it on or off. Make it wider for a button per mode.</string>
     <!-- Widget button while nothing is on: the name of the thing, not a mode. -->
     <string name="widget_off_label">Focus</string>
-    <!-- Announced for the whole widget so TalkBack does not read a bare glyph. -->
-    <string name="widget_state_on">%1$s is on</string>
-    <string name="widget_state_off">No focus mode is on</string>
+    <!-- Secondary value under the active mode's name, at the largest size only. -->
+    <string name="widget_value_on">On</string>
+    <!--
+      Announced for the widget's toggle zone. Carries the state *and* what a tap does,
+      because the zone is one of two on the same widget and "Work is on" alone would
+      leave a screen-reader user unable to tell the toggle from the chevron beside it.
+      The double-tap wording is TalkBack's own vocabulary for a single tap.
+    -->
+    <string name="widget_toggle_on">%1$s, on, double-tap to turn off</string>
+    <string name="widget_toggle_off">Focus, off, double-tap to turn on</string>
+    <!-- The chevron zone, and the overflow cell at the wider sizes. Both open the
+         picker, so both announce what opening it is for. -->
+    <string name="widget_choose_mode">Choose a focus mode</string>
     <!-- Shown instead of the buttons when Do Not Disturb access is missing or no
          modes exist: both are only fixable in the app, and the widget taps through. -->
     <string name="widget_unavailable">Open Focus Modes to finish setting up</string>

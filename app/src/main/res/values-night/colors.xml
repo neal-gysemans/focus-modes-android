@@ -2,10 +2,12 @@
 <!--
   Dark-theme colours for the widget picker's static preview.
 
-  Only the card surface flips: the accent is a mode's own colour, which is the same
-  saturated indigo in both themes by design (see ui/ModePalette), and white-on-indigo is
-  the pairing the placed widget uses too.
+  The card surface and the two neutrals flip: the accent is a mode's own colour, which is
+  the same saturated indigo in both themes by design (see ui/ModePalette), and
+  white-on-indigo is the pairing the placed widget uses too.
 -->
 <resources>
     <color name="widget_preview_card">#FF1C1B1F</color>
+    <color name="widget_preview_hairline">#33FFFFFF</color>
+    <color name="widget_preview_muted">#FFAEAAAE</color>
 </resources>
