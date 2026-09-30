@@ -3,7 +3,6 @@ package be.nealgysemans.focusmodes.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -32,20 +31,16 @@ class ActiveStatePreferences(private val context: Context) : ActiveStateStore {
     /** Live pointer for the UI and the tile's label. */
     val flow: Flow<ActiveState> = context.activeStateDataStore.data.map { it.toActiveState() }
 
-    suspend fun load(): ActiveState = read()
-
-    suspend fun save(state: ActiveState) {
+    private suspend fun save(state: ActiveState) {
         context.activeStateDataStore.edit { prefs ->
             if (state.activeModeId == null) {
                 prefs.remove(KEY_ACTIVE_MODE_ID)
                 prefs.remove(KEY_SOURCE)
                 prefs.remove(KEY_SINCE)
-                prefs.remove(KEY_PINNED)
             } else {
                 prefs[KEY_ACTIVE_MODE_ID] = state.activeModeId
                 prefs[KEY_SOURCE] = (state.source ?: ActivationSource.USER).name
                 prefs[KEY_SINCE] = state.since
-                prefs[KEY_PINNED] = state.pinnedByUser
             }
         }
     }
@@ -67,6 +62,15 @@ class ActiveStatePreferences(private val context: Context) : ActiveStateStore {
 
     private suspend fun readSuspending(): ActiveState = flow.first()
 
+    /**
+     * Decode the stored pointer.
+     *
+     * The retired `pinned_by_user` key is deliberately not read. `ActiveState.pinnedByUser`
+     * derives the pin from [KEY_SOURCE] now, and every value ever written under the old key
+     * was already equal to `source == USER` — so there is nothing to migrate, only a key to
+     * stop reading. A store written by an older build decodes to exactly the same state it
+     * used to.
+     */
     private fun Preferences.toActiveState(): ActiveState {
         val modeId = this[KEY_ACTIVE_MODE_ID] ?: return ActiveState.IDLE
         return ActiveState(
@@ -75,7 +79,6 @@ class ActiveStatePreferences(private val context: Context) : ActiveStateStore {
                 ActivationSource.entries.firstOrNull { it.name == name }
             },
             since = this[KEY_SINCE] ?: 0L,
-            pinnedByUser = this[KEY_PINNED] ?: false,
         )
     }
 
@@ -83,6 +86,5 @@ class ActiveStatePreferences(private val context: Context) : ActiveStateStore {
         val KEY_ACTIVE_MODE_ID = stringPreferencesKey("active_mode_id")
         val KEY_SOURCE = stringPreferencesKey("source")
         val KEY_SINCE = longPreferencesKey("since")
-        val KEY_PINNED = booleanPreferencesKey("pinned_by_user")
     }
 }

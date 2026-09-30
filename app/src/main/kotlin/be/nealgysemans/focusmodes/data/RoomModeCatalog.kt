@@ -26,4 +26,19 @@ class RoomModeCatalog(private val modeDao: ModeDao) : ModeCatalog {
 
     /** Drop the snapshot after a write so the next reconcile re-reads. */
     fun invalidate() = snapshot.set(null)
+
+    /**
+     * Cache the system's rule id on [modeId]'s row, or clear it with a null [ruleId].
+     *
+     * The write and the [invalidate] belong together, which is why they are one call: the
+     * two callers that need this — the adapter handing back a freshly created id, and the
+     * `AUTOMATIC_RULE_STATUS_REMOVED` path dropping a dead one — had the pair open-coded,
+     * and a write without the invalidate leaves the engine reading a snapshot in which the
+     * rule id is still the old one. That produces a duplicate rule on the next reconcile,
+     * or an update aimed at a rule the system has already forgotten.
+     */
+    fun setZenRuleId(modeId: String, ruleId: String?) {
+        runBlocking { modeDao.setZenRuleId(modeId, ruleId) }
+        invalidate()
+    }
 }

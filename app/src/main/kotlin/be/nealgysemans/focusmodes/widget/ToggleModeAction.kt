@@ -13,7 +13,6 @@ import be.nealgysemans.focusmodes.engine.ActivationSource
 import be.nealgysemans.focusmodes.engine.Direction
 import be.nealgysemans.focusmodes.engine.TriggerEvent
 import be.nealgysemans.focusmodes.notification.SurfaceSync
-import be.nealgysemans.focusmodes.tile.TileNudge
 import be.nealgysemans.focusmodes.tile.TileSnapshotSource
 import be.nealgysemans.focusmodes.tile.TileStateCache
 
@@ -70,18 +69,20 @@ class ToggleModeAction : ActionCallback {
                 .getOrNull() ?: return
         }
 
-        val turningOff = snapshot.activeModeId == modeId
-        val direction = if (turningOff) Direction.DEACTIVATE else Direction.ACTIVATE
+        val direction = if (snapshot.activeModeId == modeId) {
+            Direction.DEACTIVATE
+        } else {
+            Direction.ACTIVATE
+        }
 
-        // Mirrors what MainActivity and TilePrefsActivity do around their own toggles: the
-        // tile is a different surface with a much tighter repaint window, so it is flipped
-        // and nudged here rather than left to wait for the engine. `SurfaceSync` still has
+        // The same flip-submit-nudge every hand-made toggle in the app performs, owned by
+        // `AppGraph` so this surface cannot drift from the other four. The tile flip and
+        // nudge are part of it because the tile has a much tighter repaint window than a
+        // widget does and may well be where the user looks next. `SurfaceSync` still has
         // the last word for every surface, including this one.
-        TileStateCache.flipTo(if (turningOff) null else modeId)
-        AppGraph.from(context).submitAsync(
+        AppGraph.from(context).submitUserToggleAsync(
             TriggerEvent(ActivationSource.USER, modeId, direction),
         )
-        TileNudge.refresh(context)
         Log.d(TAG, "widget tap -> $direction $modeId")
     }
 

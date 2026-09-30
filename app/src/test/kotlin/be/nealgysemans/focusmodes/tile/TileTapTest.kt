@@ -1,7 +1,11 @@
 package be.nealgysemans.focusmodes.tile
 
+import be.nealgysemans.focusmodes.engine.ActivationSource
+import be.nealgysemans.focusmodes.engine.Direction
+import be.nealgysemans.focusmodes.engine.TriggerEvent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -52,6 +56,23 @@ class TileTapTest {
     @Test
     fun `with no modes defined the tile cannot act`() {
         assertEquals(TileTap.Blocked, snapshot(modes = emptyList()).tap())
+    }
+
+    @Test
+    fun `blocked names the two reasons, and only those`() {
+        // Three surfaces branch on this one predicate — [tap] returns Blocked, the tile paints
+        // STATE_UNAVAILABLE and the widget replaces its card — so it is pinned on its own
+        // rather than only through [tap]'s answer.
+        assertTrue("no grant", snapshot(dndGranted = false).blocked)
+        assertTrue("no modes", snapshot(modes = emptyList()).blocked)
+        assertTrue("neither", snapshot(modes = emptyList(), dndGranted = false).blocked)
+        assertFalse("a grant and a mode is enough", snapshot().blocked)
+    }
+
+    @Test
+    fun `blocked does not depend on anything being on`() {
+        assertFalse(snapshot(activeModeId = work.id).blocked)
+        assertFalse(snapshot(activeModeId = null, lastUsedModeId = null).blocked)
     }
 
     // --- on means off --------------------------------------------------------
@@ -323,6 +344,98 @@ class TileTapTest {
 
         assertEquals(null, TileStateCache.value.activeModeId)
         assertEquals(work.id, TileStateCache.value.lastUsedModeId)
+    }
+
+    // --- a pick from a picker ------------------------------------------------
+    //
+    // Shared by the tile's dialog, the tile's long-press grid and the widget's picker. The
+    // user has already said which mode, so unlike [tap] there is nothing to infer and no
+    // preference that can change the answer — which is exactly why all three can share it.
+
+    @Test
+    fun `picking a mode activates it`() {
+        assertEquals(TileTap.Activate(sleep.id), snapshot().pick(sleep.id))
+    }
+
+    @Test
+    fun `picking a mode while another is on still just activates it`() {
+        // The engine's single-active rule takes the outgoing one down; the picker does not
+        // have to say so, and must not send two events.
+        assertEquals(
+            TileTap.Activate(sleep.id),
+            snapshot(activeModeId = work.id).pick(sleep.id),
+        )
+    }
+
+    @Test
+    fun `picking the mode that is already on re-activates it rather than toggling`() {
+        // Turning off is the "Off" row's job. A pick names a mode, and naming the mode that
+        // is on cannot mean "off" — the engine drops it as ALREADY_IN_DESIRED_STATE.
+        assertEquals(
+            TileTap.Activate(work.id),
+            snapshot(activeModeId = work.id).pick(work.id),
+        )
+    }
+
+    @Test
+    fun `picking Off deactivates whatever is on`() {
+        assertEquals(
+            TileTap.Deactivate(work.id),
+            snapshot(activeModeId = work.id).pick(null),
+        )
+    }
+
+    @Test
+    fun `picking Off while nothing is on is nothing to do`() {
+        // Null, not Blocked and not Ask: the picker always offers "Off" including when it is
+        // already the selected row, and there is no mode to name in an event.
+        assertNull(snapshot().pick(null))
+    }
+
+    @Test
+    fun `a pick ignores the tap behaviour entirely`() {
+        // The whole point of [pick] being separate from [tap]: CYCLE and ALWAYS_ASK are about
+        // resolving an ambiguous gesture, and a pick is not ambiguous.
+        TapBehavior.entries.forEach { behaviour ->
+            assertEquals(
+                "under $behaviour",
+                TileTap.Activate(sleep.id),
+                snapshot(activeModeId = work.id, tapBehavior = behaviour).pick(sleep.id),
+            )
+        }
+    }
+
+    @Test
+    fun `an active id naming a deleted mode still deactivates on an Off pick`() {
+        // Deliberately unlike [tap], which treats a deleted active mode as off. Here the
+        // engine will reject the id as UNKNOWN_MODE, which is the same outcome as doing
+        // nothing — and reporting the id is what keeps the picker from having to know.
+        assertEquals(
+            TileTap.Deactivate("deleted"),
+            snapshot(activeModeId = "deleted").pick(null),
+        )
+    }
+
+    // --- a tap as an engine event --------------------------------------------
+
+    @Test
+    fun `the two taps that name a mode become USER events`() {
+        assertEquals(
+            TriggerEvent(ActivationSource.USER, work.id, Direction.ACTIVATE),
+            TileTap.Activate(work.id).toUserEvent(),
+        )
+        assertEquals(
+            TriggerEvent(ActivationSource.USER, work.id, Direction.DEACTIVATE),
+            TileTap.Deactivate(work.id).toUserEvent(),
+        )
+    }
+
+    @Test
+    fun `the two taps that open a surface are not events`() {
+        // Ask and Blocked are answered with a window, not with a state change. Null here is
+        // what stops a caller submitting something the engine would have to invent a mode for.
+        assertNull(TileTap.Ask.toUserEvent())
+        assertNull(TileTap.Blocked.toUserEvent())
     }
 
     // --- the stale-read clobber ----------------------------------------------

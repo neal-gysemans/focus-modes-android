@@ -57,7 +57,8 @@ import be.nealgysemans.focusmodes.engine.PeopleFilter
 import be.nealgysemans.focusmodes.engine.ScheduleWindow
 import be.nealgysemans.focusmodes.health.Grant
 import be.nealgysemans.focusmodes.health.HealthCheck
-import be.nealgysemans.focusmodes.health.PermissionHealth
+import be.nealgysemans.focusmodes.health.Remedy
+import be.nealgysemans.focusmodes.schedule.wrapsMidnight
 import java.time.ZonedDateTime
 
 /**
@@ -89,7 +90,6 @@ fun ModeEditorScreen(
     mode: ModeEntity,
     /** Every schedule row in the database, this mode's and everyone else's. */
     schedules: List<TriggerEntity>,
-    health: PermissionHealth,
     checks: List<HealthCheck>,
     actions: ModeListActions,
     onClose: () -> Unit,
@@ -191,7 +191,6 @@ fun ModeEditorScreen(
                     modeId = mode.id,
                     schedules = schedules,
                     exactAlarm = checks.firstOrNull { it.id == Grant.EXACT_ALARM },
-                    health = health,
                     actions = actions,
                 )
             }
@@ -433,7 +432,6 @@ private fun SchedulesCard(
     modeId: String,
     schedules: List<TriggerEntity>,
     exactAlarm: HealthCheck?,
-    health: PermissionHealth,
     actions: ModeListActions,
 ) {
     val clock = rememberClockStyle()
@@ -463,7 +461,7 @@ private fun SchedulesCard(
         // first schedule has no reason to connect a card they scrolled past to the
         // schedule they just set for 07:00.
         if (exactAlarm != null && !exactAlarm.granted && rows.isNotEmpty()) {
-            ExactAlarmHint(check = exactAlarm, health = health, actions = actions)
+            ExactAlarmHint(remedy = exactAlarm.remedy, actions = actions)
         }
 
         if (rows.isEmpty()) {
@@ -632,35 +630,45 @@ private fun daySetLabel(days: Set<Int>, clock: ClockStyle): String = when (daySe
     DaySet.CUSTOM -> daysLabel(days, clock)
 }
 
-/** "09:00 – 17:00", or "23:00 – 07:00 next day" when the window crosses midnight. */
+/**
+ * "09:00 – 17:00", or "23:00 – 07:00 next day" when the window crosses midnight.
+ *
+ * Asks `ScheduleWindows.wrapsMidnight` rather than comparing the two minutes here, which
+ * it used to do *inverted*: `start <= end` labelled a 09:00–09:00 window as an ordinary
+ * same-day range, while the engine treats equal times as a full 24 hours. The row said
+ * one thing and the phone did another, and the phone was right.
+ */
 @Composable
 private fun rangeLabel(window: ScheduleWindow, clock: ClockStyle): String {
     val start = timeLabel(window.startMinuteOfDay, clock)
     val end = timeLabel(window.endMinuteOfDay, clock)
-    val template = if (window.startMinuteOfDay <= window.endMinuteOfDay) {
-        R.string.ui_schedule_range
-    } else {
+    val template = if (window.wrapsMidnight) {
         R.string.ui_schedule_range_next_day
+    } else {
+        R.string.ui_schedule_range
     }
     return stringResource(template, start, end)
 }
 
-/** The missing exact-alarm grant, restated where a schedule is being created. */
+/**
+ * The missing exact-alarm grant, restated where a schedule is being created.
+ *
+ * Only [Remedy.OpenSettings] draws a button here. The exact-alarm grant is never
+ * [Remedy.AskInApp] — it is a Settings toggle, not a runtime permission — so unlike the
+ * health card at the top of the list there is no second kind of button to offer, and the
+ * cases this cannot act on are simply the explanation on its own.
+ */
 @Composable
-private fun ExactAlarmHint(
-    check: HealthCheck,
-    health: PermissionHealth,
-    actions: ModeListActions,
-) {
+private fun ExactAlarmHint(remedy: Remedy, actions: ModeListActions) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             text = stringResource(R.string.ui_schedule_exact_alarm_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
         )
-        if (health.canOpen(check.settingsIntent)) {
+        if (remedy is Remedy.OpenSettings) {
             TextButton(
-                onClick = { check.settingsIntent?.let(actions.onOpenSettings) },
+                onClick = { actions.onOpenSettings(remedy.intent) },
                 contentPadding = PaddingValues(0.dp),
             ) {
                 Text(stringResource(R.string.action_fix))
@@ -727,22 +735,12 @@ private fun GlyphChoice(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(percent = 50)
-    Box(
-        modifier = Modifier
-            .size(36.dp)
-            .clip(shape)
-            .background(
-                if (selected) accent.copy(alpha = SELECTED_GLYPH_ALPHA)
-                else MaterialTheme.colorScheme.surfaceContainerHighest,
-            )
-            .border(
-                width = if (selected) 2.dp else 0.dp,
-                color = if (selected) accent else Color.Transparent,
-                shape = shape,
-            )
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
+    SelectableSwatch(
+        shape = RoundedCornerShape(percent = 50),
+        selected = selected,
+        accent = accent,
+        onClick = onClick,
+        modifier = Modifier.size(36.dp),
     ) {
         Icon(
             painter = painterResource(glyph.res),
@@ -753,6 +751,15 @@ private fun GlyphChoice(
     }
 }
 
+/**
+ * A colour, and whether it is the one chosen.
+ *
+ * Deliberately not a [SelectableSwatch]: that component tints an unselected tile neutral and a
+ * selected one with its accent, and here the fill *is* the value being chosen, so it has to be
+ * the colour either way. What marks the selection is therefore a heavier ring in a neutral the
+ * palette cannot collide with, plus a tick — a swatch that only changed its own colour's alpha
+ * would be unreadable as "selected" against the seven other colours beside it.
+ */
 @Composable
 private fun ColorChoice(color: Color, selected: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(percent = 50)
@@ -785,5 +792,3 @@ private const val CHOICES_PER_ROW = 4
 
 /** Two per row: "Starred" and "Contacts" are too long for four across on a phone. */
 private const val FILTERS_PER_ROW = 2
-
-private const val SELECTED_GLYPH_ALPHA = 0.20f

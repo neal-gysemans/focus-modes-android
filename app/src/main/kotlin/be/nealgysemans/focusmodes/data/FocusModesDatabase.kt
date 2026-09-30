@@ -116,17 +116,27 @@ internal object Seed {
      * Seeded **disabled**: silencing a new user's phone on the first night
      * without them asking is a support ticket, so the schedules are visible in
      * the UI but inert until switched on.
+     *
+     * The `params_json` comes from [scheduleParamsJson], the same writer the editor uses,
+     * rather than from a hand-typed literal. `ScheduleParamsTest` asserts that the two agree
+     * character for character, and it had to, because they were two independent spellings of
+     * one format: a writer that emitted a different shape than the seed would leave an
+     * installed database holding two formats in one column, with only the test standing
+     * between them. Now there is one spelling and the test confirms it rather than guarding
+     * it.
      */
     val TRIGGERS: List<String> = listOf(
         insertTrigger(
             id = "trigger-work-weekdays",
             modeId = MODE_WORK,
-            paramsJson = """{"start":540,"end":1020,"days":[1,2,3,4,5]}""",
+            // Weekdays 09:00–17:00.
+            paramsJson = scheduleParamsJson(9 * 60, 17 * 60, setOf(1, 2, 3, 4, 5)),
         ),
         insertTrigger(
             id = "trigger-sleep-nightly",
             modeId = MODE_SLEEP,
-            paramsJson = """{"start":1380,"end":420,"days":[1,2,3,4,5,6,7]}""",
+            // Every night 23:00–07:00.
+            paramsJson = scheduleParamsJson(23 * 60, 7 * 60, setOf(1, 2, 3, 4, 5, 6, 7)),
         ),
     )
 

@@ -44,10 +44,12 @@ import be.nealgysemans.focusmodes.data.TriggerEntity
 import be.nealgysemans.focusmodes.engine.ActivationSource
 import be.nealgysemans.focusmodes.engine.ActiveState
 import be.nealgysemans.focusmodes.engine.Direction
+import be.nealgysemans.focusmodes.engine.ScheduleWindow
 import be.nealgysemans.focusmodes.engine.TriggerEvent
 import be.nealgysemans.focusmodes.health.Grant
 import be.nealgysemans.focusmodes.health.HealthCheck
 import be.nealgysemans.focusmodes.health.PermissionHealth
+import be.nealgysemans.focusmodes.health.Remedy
 import be.nealgysemans.focusmodes.schedule.nextBoundaryAfter
 import be.nealgysemans.focusmodes.tile.TapBehavior
 import be.nealgysemans.focusmodes.tile.TilePrefs
@@ -132,6 +134,15 @@ fun ModeListScreen(
     val clock = rememberClockStyle()
     val now = rememberNow()
 
+    // Every mode's "Next:" line, in one pass, remembered against the three things that can
+    // change it. The per-row version re-parsed *every* schedule row's `params_json` once per
+    // visible mode, and `rememberNow` ticks on the minute — so a three-mode, two-schedule
+    // setup paid six JSON decodes a minute for labels that had not changed. Same shape the
+    // editor's schedule card already uses.
+    val nextBoundaries = remember(scheduleList, clock, now) {
+        nextBoundaryLabels(scheduleList, clock, now)
+    }
+
     // The mode being edited is held by **id**, not as an entity. Holding the entity
     // would freeze the editor on the snapshot it opened with, and the editor's schedule
     // list has to show rows that were written while it is open.
@@ -142,7 +153,6 @@ fun ModeListScreen(
         ModeEditorScreen(
             mode = editing,
             schedules = scheduleList,
-            health = health,
             checks = checks,
             actions = actions,
             onClose = { editingModeId = null },
@@ -159,14 +169,14 @@ fun ModeListScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             items(checks.filterNot(HealthCheck::granted), key = { it.id.name }) { check ->
-                HealthCard(check, health, actions)
+                HealthCard(check, actions)
             }
 
             items(modeList, key = ModeEntity::id) { mode ->
                 ModeRow(
                     mode = mode,
                     isActive = active.activeModeId == mode.id,
-                    nextBoundary = nextBoundaryLabelFor(mode.id, scheduleList, clock, now),
+                    nextBoundary = nextBoundaries[mode.id],
                     onEdit = { editingModeId = mode.id },
                     onToggle = { wantOn ->
                         actions.onToggle(
@@ -192,26 +202,30 @@ fun ModeListScreen(
 }
 
 /**
- * "Mon 09:00" for the soonest boundary any of [modeId]'s **enabled** schedules will
- * hit, or null when it has none.
+ * "Mon 09:00" per mode: the soonest boundary any of that mode's **enabled** schedules will
+ * hit. Modes with no enabled schedule are absent from the map rather than mapped to null.
  *
- * Deliberately the earliest across the mode's windows rather than one row's: the list
- * answers "when will this mode next do something by itself?", and that is whichever of
- * its schedules gets there first. The per-schedule answers live in the editor.
+ * Deliberately the earliest across a mode's windows rather than one row's: the list answers
+ * "when will this mode next do something by itself?", and that is whichever of its schedules
+ * gets there first. The per-schedule answers live in the editor.
+ *
+ * One pass over the rows, decoding each `params_json` exactly once and grouping by mode,
+ * rather than a per-mode filter that walked and decoded the whole list again for every row on
+ * screen.
  */
-private fun nextBoundaryLabelFor(
-    modeId: String,
+private fun nextBoundaryLabels(
     schedules: List<TriggerEntity>,
     clock: ClockStyle,
     now: ZonedDateTime,
-): String? {
-    val windows = schedules
-        .filter { it.modeId == modeId && it.enabled }
-        .toScheduleRows()
-        .mapNotNull(ScheduleRow::window)
-    val boundary = windows.nextBoundaryAfter(now) ?: return null
-    return boundaryLabel(boundary, clock)
-}
+): Map<String, String> = schedules
+    .filter(TriggerEntity::enabled)
+    .toScheduleRows()
+    .mapNotNull(ScheduleRow::window)
+    .groupBy(ScheduleWindow::modeId)
+    .mapNotNull { (modeId, windows) ->
+        windows.nextBoundaryAfter(now)?.let { modeId to boundaryLabel(it, clock) }
+    }
+    .toMap()
 
 /**
  * One mode.
@@ -389,14 +403,13 @@ private val TapBehavior.summaryRes: Int
 /**
  * One missing grant, with the button that fixes it.
  *
- * Says which feature is lost rather than just "grant this", and the button is only
- * offered when it would actually land somewhere — OEM skins do remove Settings
- * screens, and firing an unresolvable intent throws.
+ * Says which feature is lost rather than just "grant this". Which button — or none — is
+ * `HealthCheck.remedy`'s answer, decided when the check was taken rather than by probing
+ * the package manager from inside this composition on every recomposition.
  */
 @Composable
 private fun HealthCard(
     check: HealthCheck,
-    health: PermissionHealth,
     actions: ModeListActions,
 ) {
     val message = when (check.id) {
@@ -419,19 +432,21 @@ private fun HealthCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(text = stringResource(message), style = MaterialTheme.typography.bodyMedium)
-            when {
+            when (val remedy = check.remedy) {
                 // POST_NOTIFICATIONS is a normal runtime permission: ask in-app.
-                check.settingsIntent == null -> TextButton(onClick = actions.onRequestNotifications) {
+                Remedy.AskInApp -> TextButton(onClick = actions.onRequestNotifications) {
                     Text(stringResource(R.string.action_allow))
                 }
 
-                health.canOpen(check.settingsIntent) -> TextButton(
-                    onClick = { actions.onOpenSettings(check.settingsIntent) },
+                is Remedy.OpenSettings -> TextButton(
+                    onClick = { actions.onOpenSettings(remedy.intent) },
                 ) {
                     Text(stringResource(R.string.action_fix))
                 }
 
-                else -> Unit
+                // Nothing this build can send them to. Better an explanation with no
+                // button than a button that throws.
+                Remedy.None -> Unit
             }
         }
     }

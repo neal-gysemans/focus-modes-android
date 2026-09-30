@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 import java.time.ZonedDateTime
@@ -47,19 +48,24 @@ private fun millisUntilNextMinute(now: ZonedDateTime): Long {
  * How this device wants dates and times written: its language, and its hour convention.
  *
  * Two different sources, which is the whole reason this exists as one call. The locale
- * is read from the context's own configuration rather than `Locale.getDefault()` so a
+ * is read from the composition's configuration rather than `Locale.getDefault()` so a
  * per-app language override is honoured and labels recompose when the language changes.
  * The hour convention is the *setting* — `DateFormat.is24HourFormat` — not the locale's
  * default, because they disagree on plenty of phones (an `en_US` device with the
  * 24-hour clock switched on is the ordinary case) and the Material time picker follows
  * the setting. Every time this app prints has to follow it too, or a value reads back
  * in a different convention than the one it was typed in.
+ *
+ * [LocalConfiguration], not `LocalContext.current.resources.configuration`: the latter is the
+ * same object but reading it through the context is not configuration-aware, so a language
+ * change would not invalidate this composition and the labels would keep the old locale until
+ * something else recomposed them. Exactly the class of staleness bug this whole file exists to
+ * fix, and the one the platform's own lint check names.
  */
 @Composable
 internal fun rememberClockStyle(): ClockStyle {
-    val context = LocalContext.current
-    val configuration = context.resources.configuration
-    val is24Hour = DateFormat.is24HourFormat(context)
+    val configuration = LocalConfiguration.current
+    val is24Hour = DateFormat.is24HourFormat(LocalContext.current)
     return remember(configuration, is24Hour) {
         ClockStyle(locale = configuration.locales[0], is24Hour = is24Hour)
     }

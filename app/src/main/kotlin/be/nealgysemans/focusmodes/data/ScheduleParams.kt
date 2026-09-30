@@ -30,11 +30,22 @@ import java.util.UUID
  * JVM, which is the only test that can catch the writer and reader drifting apart.
  */
 
+// The two calendar facts the whole app shares, declared here — the lowest layer that needs
+// them — so that `schedule/` and `ui/` import them rather than each keeping a copy. They had
+// four spellings between them: this file's Int and `ScheduleWindows`' Long
+// `MINUTES_PER_DAY`, and this file's `1..7` range beside `ScheduleRules`' `(1..7).toList()`.
+
 /** Minutes in a day. Every stored minute-of-day is reduced modulo this. */
 internal const val MINUTES_PER_DAY: Int = 24 * 60
 
-/** ISO day-of-week values, the only ones `days` may contain. */
-internal val ISO_DAYS: IntRange = 1..7
+/**
+ * ISO day-of-week values (1 = Monday) in week order: the only ones `days` may contain, and
+ * the order every day-set the UI draws is presented in.
+ *
+ * A `List` rather than an `IntRange` because the order is load-bearing for the UI — the day
+ * toggles and "Mon, Wed, Fri" both iterate it — and membership over seven elements is free.
+ */
+internal val ISO_WEEK: List<Int> = (1..7).toList()
 
 /**
  * Encode a schedule window into the canonical `params_json`.
@@ -48,9 +59,9 @@ fun scheduleParamsJson(
     endMinuteOfDay: Int,
     daysOfWeek: Set<Int>,
 ): String {
-    val days = daysOfWeek.filter { it in ISO_DAYS }.sorted().joinToString(separator = ",")
-    return "{\"start\":${minuteOfDay(startMinuteOfDay)}," +
-        "\"end\":${minuteOfDay(endMinuteOfDay)}," +
+    val days = daysOfWeek.filter { it in ISO_WEEK }.sorted().joinToString(separator = ",")
+    return "{\"start\":${normalizeMinuteOfDay(startMinuteOfDay)}," +
+        "\"end\":${normalizeMinuteOfDay(endMinuteOfDay)}," +
         "\"days\":[$days]}"
 }
 
@@ -79,6 +90,13 @@ fun scheduleTrigger(
  */
 fun newScheduleTriggerId(): String = "schedule-${UUID.randomUUID()}"
 
-/** Fold any integer into 0..1439, so 1440 ("midnight tomorrow") reads as 0. */
-private fun minuteOfDay(minute: Int): Int =
+/**
+ * Fold any integer into 0..1439, so 1440 ("midnight tomorrow") reads as 0.
+ *
+ * Double-modulo rather than a single one, because Kotlin's `%` keeps the sign of the
+ * dividend: `-60 % 1440` is -60, not 1380. Shared with `ui/timeLabel`, which renders these
+ * values and has to fold exactly the same way — the writer normalising and the reader
+ * normalising differently is how a stored time comes back as something the user never typed.
+ */
+internal fun normalizeMinuteOfDay(minute: Int): Int =
     ((minute % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY

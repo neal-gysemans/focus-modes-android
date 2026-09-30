@@ -33,20 +33,19 @@ class ZenRuleConfigActivity : Activity() {
 
         // Resolved through the package manager instead of naming the Activity class,
         // so this file carries no dependency on the ui/ package.
+        // The rule id is logged, not forwarded. It used to travel on the launch intent under
+        // an extra nothing read, against a future "land on this mode's editor" that does not
+        // exist — and an extra with no reader is a promise the UI looks like it keeps.
         val launch = packageManager.getLaunchIntentForPackage(packageName)
         if (launch == null) {
             Log.w(TAG, "no launcher intent for $packageName; nothing to show")
         } else {
-            if (ruleId != null) launch.putExtra(EXTRA_FOCUS_RULE_ID, ruleId)
             startActivity(launch)
         }
         finish()
     }
 
-    companion object {
-        private const val TAG = "ZenRuleConfig"
-
-        /** Rule id handed on to the app UI, for a future "edit this mode" landing. */
-        const val EXTRA_FOCUS_RULE_ID = "be.nealgysemans.focusmodes.extra.RULE_ID"
+    private companion object {
+        const val TAG = "ZenRuleConfig"
     }
 }

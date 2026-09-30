@@ -1,7 +1,7 @@
 package be.nealgysemans.focusmodes.engine
 
 import be.nealgysemans.focusmodes.zen.ZenAdapter
-import be.nealgysemans.focusmodes.zen.ZenRuleSnapshot
+import java.time.Clock
 import java.time.ZonedDateTime
 
 /**
@@ -50,14 +50,9 @@ class FakeZenAdapter : ZenAdapter {
         return true
     }
 
-    override fun readBack(modeId: String): ZenRuleSnapshot? {
+    override fun readBack(modeId: String): Boolean? {
         if (modeId !in knownRules) return null
-        return ZenRuleSnapshot(
-            ruleId = "rule-$modeId",
-            exists = true,
-            enabled = true,
-            active = modeId in activeModes,
-        )
+        return modeId in activeModes
     }
 
     /**
@@ -65,7 +60,8 @@ class FakeZenAdapter : ZenAdapter {
      *
      * Separate from [readBack], which deliberately returns null for a mode whose
      * rule was never ensured — that is the real adapter's behaviour and tests of
-     * the `onEvent` path (which does not ensure rules) rely on it.
+     * the `onEvent` path (which does not ensure rules) rely on it. [readBack] answering
+     * null there rather than false is exactly what `healDrift`'s `!= true` is written for.
      */
     fun isActive(modeId: String): Boolean = modeId in activeModes
 
@@ -111,4 +107,43 @@ fun testMode(id: String): FocusMode = FocusMode(
     messagesFrom = PeopleFilter.STARRED,
     repeatCallers = true,
     effects = ModeEffects(),
+)
+
+/**
+ * A [ModeEngine] over fresh fakes, with the fakes handed back so a test can drive and
+ * inspect them.
+ *
+ * The two engine test classes had the same eighteen-line `@Before` — four `lateinit` fields
+ * and a five-argument constructor call — differing only in the fixed instant. Kept here as a
+ * function returning the fakes rather than as a base class the tests extend: inheritance
+ * would hide which fake a test is talking to, and these tests are entirely about what the
+ * fakes recorded.
+ *
+ * @param clock the fixed instant the engine reads `now` and `since` from.
+ * @param modes the catalog. Anything not in here is an `UNKNOWN_MODE` to the engine.
+ */
+fun testEngine(clock: Clock, modes: List<FocusMode>): TestEngine {
+    val zen = FakeZenAdapter()
+    val store = FakeActiveStateStore()
+    val schedules = FakeScheduleSource()
+    return TestEngine(
+        engine = ModeEngine(
+            clock = clock,
+            catalog = FakeModeCatalog(modes),
+            schedules = schedules,
+            state = store,
+            zen = zen,
+        ),
+        zen = zen,
+        store = store,
+        schedules = schedules,
+    )
+}
+
+/** An engine and the three fakes behind it. */
+class TestEngine(
+    val engine: ModeEngine,
+    val zen: FakeZenAdapter,
+    val store: FakeActiveStateStore,
+    val schedules: FakeScheduleSource,
 )

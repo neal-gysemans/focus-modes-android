@@ -1,5 +1,7 @@
 package be.nealgysemans.focusmodes.data
 
+import be.nealgysemans.focusmodes.EVERY_DAY
+import be.nealgysemans.focusmodes.WEEKDAY_DAYS
 import be.nealgysemans.focusmodes.engine.ScheduleWindow
 import be.nealgysemans.focusmodes.schedule.toWindowOrNull
 import org.junit.Assert.assertEquals
@@ -74,11 +76,11 @@ class ScheduleParamsTest {
 
     @Test
     fun `a plain window survives the round trip`() {
-        val decoded = roundTrip(startMinuteOfDay = 9 * 60, endMinuteOfDay = 17 * 60, days = WORKDAYS)
+        val decoded = roundTrip(startMinuteOfDay = 9 * 60, endMinuteOfDay = 17 * 60, days = WEEKDAY_DAYS)
 
         assertEquals(9 * 60, decoded?.startMinuteOfDay)
         assertEquals(17 * 60, decoded?.endMinuteOfDay)
-        assertEquals(WORKDAYS, decoded?.daysOfWeek)
+        assertEquals(WEEKDAY_DAYS, decoded?.daysOfWeek)
     }
 
     @Test
@@ -97,7 +99,7 @@ class ScheduleParamsTest {
 
     @Test
     fun `the first and last minute of the day survive the round trip`() {
-        val decoded = roundTrip(startMinuteOfDay = 0, endMinuteOfDay = 1439, days = WORKDAYS)
+        val decoded = roundTrip(startMinuteOfDay = 0, endMinuteOfDay = 1439, days = WEEKDAY_DAYS)
 
         assertEquals(0, decoded?.startMinuteOfDay)
         assertEquals(1439, decoded?.endMinuteOfDay)
@@ -125,8 +127,8 @@ class ScheduleParamsTest {
         // 1440 is not representable in a 0..1439 field, and 0 is not a loss: an end of 0
         // is already "wraps to the next day at minute zero", i.e. runs until midnight.
         assertEquals(
-            scheduleParamsJson(9 * 60, 0, WORKDAYS),
-            scheduleParamsJson(9 * 60, 24 * 60, WORKDAYS),
+            scheduleParamsJson(9 * 60, 0, WEEKDAY_DAYS),
+            scheduleParamsJson(9 * 60, 24 * 60, WEEKDAY_DAYS),
         )
     }
 
@@ -179,9 +181,4 @@ class ScheduleParamsTest {
         type = TriggerType.SCHEDULE,
         paramsJson = paramsJson,
     )
-
-    private companion object {
-        val WORKDAYS = setOf(1, 2, 3, 4, 5)
-        val EVERY_DAY = setOf(1, 2, 3, 4, 5, 6, 7)
-    }
 }
