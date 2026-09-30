@@ -1,15 +1,59 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Focus Modes</string>
+    <!-- Quick Settings tile label. Kept short: the platform truncates past ~18 chars,
+         and HyperOS hides it entirely, so it must never be load-bearing. -->
     <string name="tile_label">Focus</string>
+    <!-- Tile subtitle while nothing is on. The subtitle carries the active mode's name. -->
+    <string name="tile_subtitle_off">Off</string>
+    <string name="tile_prefs_label">Choose a focus mode</string>
 
     <string name="zen_trigger_description">Managed by Focus Modes</string>
 
     <string name="channel_status_name">Active mode</string>
     <string name="channel_status_description">Shows which focus mode is on, with a shortcut to turn it off.</string>
 
+    <!-- Ongoing notification. The title is the mode's name; this is the second line. -->
+    <string name="notification_active_text">Tap to open Focus Modes.</string>
+    <string name="notification_turn_off">Turn off</string>
+
+    <!-- Picker (tile dialog + long-press grid). -->
+    <string name="picker_title">Focus</string>
+    <string name="picker_off">Off</string>
+    <string name="picker_selected">Selected</string>
+
     <string name="health_dnd_access_missing">Focus Modes needs Do Not Disturb access before it can turn a mode on. Grant it in Settings.</string>
+    <string name="health_exact_alarm_missing">Without permission for exact alarms, scheduled modes can start and end minutes or hours late.</string>
+    <string name="health_post_notifications_missing">Allow notifications and Focus Modes can show which mode is on, with a one-tap way to turn it off.</string>
 
     <!-- e.g. "Calls: STARRED · Messages: NONE" -->
     <string name="mode_people_summary">Calls: %1$s · Messages: %2$s</string>
+
+    <!-- Tile card in the app. -->
+    <string name="tile_card_title">Quick Settings tile</string>
+    <string name="action_add_tile">Add the Focus tile</string>
+    <string name="always_ask_title">Always ask which mode</string>
+    <string name="always_ask_summary">Tapping the tile opens the picker instead of turning on the mode you used last.</string>
+
+    <!-- Mode editor. -->
+    <string name="mode_editor_title">Edit mode</string>
+    <string name="mode_editor_name">Name</string>
+    <string name="mode_editor_glyph">Icon</string>
+    <string name="mode_editor_color">Colour</string>
+
+    <string name="action_open_app">Open Focus Modes</string>
+    <string name="action_save">Save</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_fix">Fix this</string>
+    <string name="action_allow">Allow</string>
+
+    <!-- Glyph names. Used as content descriptions in the icon picker: a bare
+         silhouette with no label is unreadable to a screen reader. -->
+    <string name="glyph_briefcase">Briefcase</string>
+    <string name="glyph_moon">Moon</string>
+    <string name="glyph_person">Person</string>
+    <string name="glyph_book">Book</string>
+    <string name="glyph_home">Home</string>
+    <string name="glyph_dumbbell">Dumbbell</string>
+    <string name="glyph_star">Star</string>
 </resources>

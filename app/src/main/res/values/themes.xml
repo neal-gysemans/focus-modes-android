@@ -6,4 +6,34 @@
       is no second source of truth for colour.
     -->
     <style name="Theme.FocusModes" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!--
+      The tile's long-press target (QS_TILE_PREFERENCES). Floats over whatever is
+      behind it with the background dimmed, so the mode grid reads as press-and-hold
+      on a control rather than as a settings screen the user has navigated into.
+    -->
+    <style name="Theme.FocusModes.Translucent" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Dialog</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <!--
+      Theme for the Dialog handed to TileService.showDialog().
+
+      DeviceDefault so the OEM skin frames the window the way its own tile dialogs are
+      framed, and transparent + floating because the picker draws its own rounded
+      surface in Compose — a second background behind it shows as a grey rectangle
+      poking out from under the corners.
+    -->
+    <style name="Theme.FocusModes.TileDialog" parent="@android:style/Theme.DeviceDefault.Dialog.NoActionBar">
+        <item name="android:windowMinWidthMajor">80%</item>
+        <item name="android:windowMinWidthMinor">90%</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsFloating">true</item>
+    </style>
 </resources>
