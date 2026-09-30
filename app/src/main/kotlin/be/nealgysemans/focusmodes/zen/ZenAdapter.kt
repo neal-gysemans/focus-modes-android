@@ -44,11 +44,25 @@ interface ZenAdapter {
      */
     fun ensureRule(mode: FocusMode): String?
 
-    /** Drive [modeId]'s rule to `STATE_TRUE`, attributing the change to [source]. */
-    fun activate(modeId: String, source: ActivationSource)
+    /**
+     * Drive [modeId]'s rule to `STATE_TRUE`, attributing the change to [source].
+     *
+     * Returns what the **system** reports afterwards, not what we asked for: a
+     * `SOURCE_SCHEDULE` activation is silently refused while the user has snoozed
+     * the rule (see `AUTOMATIC_RULE_STATUS_DEACTIVATED`), so the only honest answer
+     * comes from reading the state back. False also covers "we have no DND access",
+     * in which case nothing happened at all.
+     */
+    fun activate(modeId: String, source: ActivationSource): Boolean
 
-    /** Drive [modeId]'s rule to `STATE_FALSE`, attributing the change to [source]. */
-    fun deactivate(modeId: String, source: ActivationSource)
+    /**
+     * Drive [modeId]'s rule to `STATE_FALSE`, attributing the change to [source].
+     *
+     * Also the documented way to clear a user snooze: the platform ignores a later
+     * `STATE_TRUE` until a `STATE_FALSE` has been sent, so a schedule's end
+     * boundary must report itself even when the mode is already off.
+     */
+    fun deactivate(modeId: String, source: ActivationSource): Boolean
 
     /** Read system truth for [modeId], or null when nothing is known about it. */
     fun readBack(modeId: String): ZenRuleSnapshot?

@@ -122,4 +122,63 @@ class ModeEngineReconcileTest {
         assertTrue(store.state.isIdle)
         assertEquals(emptyList<FakeZenAdapter.Call>(), zen.stateCalls)
     }
+
+    // --- the snooze the platform applies after a user turns a mode off -------
+    //
+    // `ZenAdapter.activate` reports what the *system* says afterwards, because a
+    // SOURCE_SCHEDULE activation is silently refused while the rule is snoozed. The
+    // engine does not consult that answer yet; these two tests pin what that means so
+    // the gap is visible rather than folklore.
+
+    @Test
+    fun `a refused schedule activation is still recorded, and reconcile keeps re-asserting it`() {
+        zen.refuseActivation = true
+        schedules.desiredModeId = sleep.id
+
+        assertEquals(Transition.Activated(sleep.id, ActivationSource.SCHEDULE), engine.reconcile())
+        assertEquals(
+            "known gap: the engine trusts its own write rather than the system's answer",
+            sleep.id,
+            store.state.activeModeId,
+        )
+
+        zen.clearCalls()
+        engine.reconcile()
+        assertEquals(
+            "healDrift retries with the schedule source, which the snooze keeps refusing",
+            listOf(FakeZenAdapter.Call.Activate(sleep.id, ActivationSource.SCHEDULE)),
+            zen.stateCalls,
+        )
+    }
+
+    @Test
+    fun `clearing the pin after a system-side off stops reconcile from resurrecting the mode`() {
+        engine.onEvent(TriggerEvent(ActivationSource.USER, work.id, Direction.ACTIVATE))
+        // The user turned the mode off from a system surface: the rule is inactive and
+        // the platform has snoozed it, while the app is still pinned.
+        zen.forceInactive(work.id)
+        zen.clearCalls()
+
+        engine.reconcile()
+
+        assertEquals(
+            "a pinned mode re-asserts as SOURCE_USER_ACTION, the one source that overrides a " +
+                "snooze — so zen/ZenStatusReceiver has to feed the user's system-side off back " +
+                "in as a DEACTIVATE, or the app resurrects a mode the user just turned off",
+            listOf(FakeZenAdapter.Call.Activate(work.id, ActivationSource.USER)),
+            zen.stateCalls,
+        )
+
+        // Exactly what the receiver does with AUTOMATIC_RULE_STATUS_DEACTIVATED.
+        engine.onEvent(TriggerEvent(ActivationSource.USER, work.id, Direction.DEACTIVATE))
+        zen.clearCalls()
+        engine.reconcile()
+
+        assertTrue("the pin is gone", store.state.isIdle)
+        assertEquals(
+            "and nothing is re-asserted afterwards",
+            emptyList<FakeZenAdapter.Call>(),
+            zen.stateCalls,
+        )
+    }
 }

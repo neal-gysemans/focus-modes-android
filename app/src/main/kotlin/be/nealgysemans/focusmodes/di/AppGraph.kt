@@ -1,5 +1,6 @@
 package be.nealgysemans.focusmodes.di
 
+import android.app.NotificationManager
 import android.content.Context
 import android.util.Log
 import be.nealgysemans.focusmodes.FocusModesApplication
@@ -16,6 +17,8 @@ import be.nealgysemans.focusmodes.notification.StatusNotifier
 import be.nealgysemans.focusmodes.schedule.AlarmScheduler
 import be.nealgysemans.focusmodes.schedule.TriggerScheduleSource
 import be.nealgysemans.focusmodes.zen.SystemZenAdapter
+import be.nealgysemans.focusmodes.zen.ZenRuleStatus
+import be.nealgysemans.focusmodes.zen.zenRuleStatusOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -91,21 +94,125 @@ class AppGraph private constructor(private val appContext: Context) {
 
     val permissionHealth: PermissionHealth by lazy { PermissionHealth(appContext) }
 
-    /** Hand a trigger to the engine on its own thread. Fire and forget. */
-    fun submitAsync(event: TriggerEvent) {
-        engineScope.launch {
+    /**
+     * Hand a trigger to the engine on its own thread.
+     *
+     * [onComplete] exists for broadcast receivers: a receiver must hold its
+     * `goAsync` result open until the engine is done, or the process can be killed
+     * mid-transition. UI and tile callers pass nothing.
+     */
+    fun submitAsync(event: TriggerEvent, onComplete: (() -> Unit)? = null) {
+        onEngineThread(onComplete) {
             val transition = engine.onEvent(event)
             Log.d(TAG, "onEvent($event) -> $transition")
             afterTransition(transition)
         }
     }
 
-    /** Ask the engine to recompute and converge. Fire and forget. */
-    fun reconcileAsync() {
-        engineScope.launch {
+    /** Ask the engine to recompute and converge, then re-arm the next boundary. */
+    fun reconcileAsync(onComplete: (() -> Unit)? = null) {
+        onEngineThread(onComplete) {
             val transition = engine.reconcile()
             Log.d(TAG, "reconcile() -> $transition")
             afterTransition(transition)
+        }
+    }
+
+    /** Re-plant the boundary alarm without touching mode state. */
+    fun rearmAsync(onComplete: (() -> Unit)? = null) {
+        onEngineThread(onComplete) { alarmScheduler.rearm() }
+    }
+
+    /**
+     * React to `ACTION_AUTOMATIC_ZEN_RULE_STATUS_CHANGED` (see `zen/ZenStatusReceiver`).
+     *
+     * The mapping from rule id to mode is a catalog lookup, not adapter state, so it
+     * works in a process that was just woken by the broadcast.
+     *
+     * Three cases, and the asymmetry between them is the point:
+     *  - **Off** (snoozed by the user, disabled or deleted in Settings): feed a
+     *    `USER`/`DEACTIVATE` event. That clears the pin — `healDrift` must never
+     *    fight a user who turned a mode off from a system surface — and the engine's
+     *    own `STATE_FALSE` write is what lifts the platform's snooze so the next
+     *    schedule cycle can activate again.
+     *  - **On**, and the app does not already believe this mode is on: a human turned
+     *    it on from a system surface (`setManualInvocationAllowed(true)` makes that
+     *    possible), so adopt it as a user activation rather than letting the app and
+     *    the phone disagree.
+     *  - anything else: reconcile, which is always safe.
+     */
+    fun onZenRuleStatusChanged(ruleId: String?, status: Int, onComplete: (() -> Unit)? = null) {
+        onEngineThread(onComplete) {
+            if (ruleId == null) {
+                Log.w(TAG, "zen status change without a rule id; reconciling")
+                reconcileNow()
+                return@onEngineThread
+            }
+            val modeId = modeCatalog.modes().firstOrNull { it.zenRuleId == ruleId }?.id
+            if (modeId == null) {
+                // Another app's rule, or one of ours whose id we have not cached yet.
+                Log.d(TAG, "zen status change for unknown rule $ruleId; ignored")
+                return@onEngineThread
+            }
+
+            when (zenRuleStatusOf(status)) {
+                ZenRuleStatus.OFF -> {
+                    if (status == NotificationManager.AUTOMATIC_RULE_STATUS_REMOVED) {
+                        // The rule object is gone; drop the stale id so the next
+                        // reconcile re-creates it instead of updating a ghost.
+                        Log.i(TAG, "rule $ruleId for $modeId was removed; clearing cached id")
+                        runBlocking { database.modeDao().setZenRuleId(modeId, null) }
+                        modeCatalog.invalidate()
+                    }
+                    val transition = engine.onEvent(
+                        TriggerEvent(ActivationSource.USER, modeId, Direction.DEACTIVATE),
+                    )
+                    Log.d(TAG, "system turned $modeId off -> $transition")
+                    afterTransition(transition)
+                }
+
+                ZenRuleStatus.ON -> when {
+                    zenAdapter.wasSelfInitiated(ruleId) ->
+                        Log.d(TAG, "ignoring the echo of our own activation of $modeId")
+
+                    activeStateStore.read().activeModeId != modeId -> {
+                        val transition = engine.onEvent(
+                            TriggerEvent(ActivationSource.USER, modeId, Direction.ACTIVATE),
+                        )
+                        Log.i(TAG, "adopting a system-side activation of $modeId -> $transition")
+                        afterTransition(transition)
+                    }
+
+                    else -> reconcileNow()
+                }
+
+                ZenRuleStatus.RECONCILE -> reconcileNow()
+            }
+        }
+    }
+
+    private fun reconcileNow() {
+        val transition = engine.reconcile()
+        Log.d(TAG, "reconcile() -> $transition")
+        afterTransition(transition)
+    }
+
+    /**
+     * Serialise one unit of work onto the engine thread.
+     *
+     * Failures are logged rather than thrown: these run inside broadcast receivers,
+     * and [onComplete] must fire even when the work blew up, or the receiver's
+     * `goAsync` result is never released.
+     */
+    private fun onEngineThread(onComplete: (() -> Unit)?, work: () -> Unit) {
+        engineScope.launch {
+            try {
+                work()
+            } catch (t: Throwable) {
+                Log.e(TAG, "engine work failed", t)
+            } finally {
+                onComplete?.invoke()
+            }
         }
     }
 
@@ -116,10 +223,10 @@ class AppGraph private constructor(private val appContext: Context) {
      * the tile's `onClick` never blocks the main thread on DataStore or SQLite.
      */
     fun toggleDefaultModeAsync() {
-        engineScope.launch {
+        onEngineThread(onComplete = null) {
             val modeId = modeCatalog.modes().firstOrNull()?.id ?: run {
                 Log.w(TAG, "toggle requested with no modes defined")
-                return@launch
+                return@onEngineThread
             }
             val alreadyOn = activeStateStore.read().activeModeId == modeId
             val transition = engine.onEvent(
@@ -141,13 +248,14 @@ class AppGraph private constructor(private val appContext: Context) {
      * Deliberately outside `ModeEngine` so the reducer stays pure and testable.
      */
     private fun afterTransition(transition: Transition) {
-        // TODO(skeleton): post/clear the StatusNotifier, call
-        //  TileService.requestListeningState so the active tile repaints, and
-        //  alarmScheduler.rearm() after any change that could move the next boundary.
-        when (transition) {
-            is Transition.Activated, is Transition.Deactivated -> alarmScheduler.rearm()
-            else -> Unit
-        }
+        // TODO(skeleton): post/clear the StatusNotifier and call
+        //  TileService.requestListeningState so the active tile repaints.
+        //
+        // Re-arming is unconditional, including after Transition.NoChange. A boot, a
+        // doze-killed alarm or a revoked exact-alarm grant all leave nothing armed
+        // while the state is already correct, so "only re-arm when something changed"
+        // is exactly the case that silently stops every schedule.
+        alarmScheduler.rearm()
     }
 
     companion object {

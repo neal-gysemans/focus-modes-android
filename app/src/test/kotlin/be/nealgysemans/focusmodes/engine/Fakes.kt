@@ -30,14 +30,24 @@ class FakeZenAdapter : ZenAdapter {
         return "rule-${mode.id}"
     }
 
-    override fun activate(modeId: String, source: ActivationSource) {
+    /**
+     * Whether the fake should refuse activations, standing in for the platform's
+     * snooze: after a user turns a rule off, `STATE_TRUE` from a schedule is
+     * silently ignored and the real adapter reports false from its read-back.
+     */
+    var refuseActivation = false
+
+    override fun activate(modeId: String, source: ActivationSource): Boolean {
         calls += Call.Activate(modeId, source)
+        if (refuseActivation && source != ActivationSource.USER) return false
         activeModes += modeId
+        return true
     }
 
-    override fun deactivate(modeId: String, source: ActivationSource) {
+    override fun deactivate(modeId: String, source: ActivationSource): Boolean {
         calls += Call.Deactivate(modeId, source)
         activeModes -= modeId
+        return true
     }
 
     override fun readBack(modeId: String): ZenRuleSnapshot? {

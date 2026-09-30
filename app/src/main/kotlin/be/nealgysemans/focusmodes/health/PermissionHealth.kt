@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
+import androidx.core.net.toUri
 
 /**
  * One grant the app needs, and whether the user has given it.
@@ -85,8 +86,27 @@ class PermissionHealth(private val context: Context) {
             id = Grant.EXACT_ALARM,
             granted = alarmManager.canScheduleExactAlarms(),
             blocking = false,
-            settingsIntent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM),
+            settingsIntent = exactAlarmSettingsIntent(),
         )
+    }
+
+    /**
+     * Where to send the user to grant exact alarms.
+     *
+     * A `package:` data URI opens this app's own row instead of the whole "Alarms &
+     * reminders" list, but it is served by a *separate* Settings activity that some
+     * builds do not ship — so it is probed first and the plain list is the fallback.
+     * Both forms are declared in `<queries>`; without that, package-visibility
+     * filtering makes each look absent and the "Fix this" button would never show.
+     */
+    private fun exactAlarmSettingsIntent(): Intent {
+        val thisApp = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+            .setData("package:${context.packageName}".toUri())
+        return if (canOpen(thisApp)) {
+            thisApp
+        } else {
+            Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+        }
     }
 
     /** `POST_NOTIFICATIONS`, a normal runtime permission requested from the Activity. */
@@ -110,19 +130,20 @@ class PermissionHealth(private val context: Context) {
         intent != null && intent.resolveActivity(context.packageManager) != null
 
     /**
-     * Deep link into the system's Modes screen for one rule, used by the "see it in
-     * Settings" affordance. Also gated on [canOpen].
+     * Deep link into the system's per-rule editor, used by the "see it in Settings"
+     * affordance. Also gated on [canOpen].
+     *
+     * This is the only way into a mode's system-side settings on HyperOS: spike #1
+     * found the Modes list itself hidden in Settings, while this action still resolves
+     * and opens the editor for the rule named in the extra.
+     *
+     * The extra is `Settings.EXTRA_AUTOMATIC_ZEN_RULE_ID`
+     * ("android.provider.extra.AUTOMATIC_ZEN_RULE_ID") — *not* the similarly named
+     * `NotificationManager.EXTRA_AUTOMATIC_ZEN_RULE_ID` ("android.app.extra...") that
+     * the status broadcast carries. Passing the wrong one opens the list with no rule
+     * selected.
      */
     fun automaticZenRuleSettings(ruleId: String): Intent =
         Intent(Settings.ACTION_AUTOMATIC_ZEN_RULE_SETTINGS)
-            .putExtra(EXTRA_AUTOMATIC_ZEN_RULE_ID, ruleId)
-
-    private companion object {
-        /**
-         * `NotificationManager.EXTRA_AUTOMATIC_ZEN_RULE_ID`, spelled out rather than
-         * referenced so this file needs no `NotificationManager` import just for a
-         * string constant.
-         */
-        const val EXTRA_AUTOMATIC_ZEN_RULE_ID = "android.app.extra.AUTOMATIC_ZEN_RULE_ID"
-    }
+            .putExtra(Settings.EXTRA_AUTOMATIC_ZEN_RULE_ID, ruleId)
 }
