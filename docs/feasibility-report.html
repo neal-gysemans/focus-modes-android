@@ -1,0 +1,302 @@
+<title>Focus Modes for Android</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&family=Spline+Sans+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --ground:#F6F8F5; --surface:#FFFFFF; --ink:#1F2823; --muted:#5B675F;
+    --border:#DCE3DC; --accent:#0E7A5F; --accent-soft:#E1F0E8;
+    --warn:#96590A; --warn-soft:#F5EBD7; --risk:#B23A2E; --risk-soft:#F7E6E2;
+    --code-bg:#EDF2EC; --thead:#F0F4EF;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ground:#0F1412; --surface:#161C18; --ink:#E3E9E2; --muted:#94A198;
+      --border:#29322B; --accent:#4CCBA0; --accent-soft:#143829;
+      --warn:#E2A24C; --warn-soft:#382B12; --risk:#E5766A; --risk-soft:#3B1E19;
+      --code-bg:#1D2620; --thead:#1A211C;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0F1412; --surface:#161C18; --ink:#E3E9E2; --muted:#94A198;
+    --border:#29322B; --accent:#4CCBA0; --accent-soft:#143829;
+    --warn:#E2A24C; --warn-soft:#382B12; --risk:#E5766A; --risk-soft:#3B1E19;
+    --code-bg:#1D2620; --thead:#1A211C;
+  }
+  body{
+    background:var(--ground); color:var(--ink);
+    font-family:"Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    font-size:1.0rem; line-height:1.6; margin:0;
+  }
+  .wrap{max-width:980px; margin:0 auto; padding:3rem 1.25rem 5rem;}
+  header.hero{border-bottom:1px solid var(--border); padding-bottom:2rem; margin-bottom:2.5rem;}
+  .eyebrow{font-family:"Spline Sans Mono", ui-monospace, monospace; font-size:.78rem; letter-spacing:.12em; text-transform:uppercase; color:var(--accent); margin:0 0 .75rem;}
+  h1{font-family:"Bricolage Grotesque", "Source Sans 3", sans-serif; font-weight:800; font-size:clamp(2rem, 5vw, 3rem); line-height:1.1; margin:0 0 1rem; text-wrap:balance;}
+  .standfirst{font-size:1.12rem; color:var(--muted); max-width:70ch; margin:0 0 1.25rem;}
+  .meta{display:flex; flex-wrap:wrap; gap:.5rem 1.5rem; font-family:"Spline Sans Mono", ui-monospace, monospace; font-size:.8rem; color:var(--muted);}
+  h2{font-family:"Bricolage Grotesque", sans-serif; font-weight:700; font-size:1.55rem; margin:3rem 0 .35rem; text-wrap:balance;}
+  h2 .secno{color:var(--accent); font-weight:800; margin-right:.5rem;}
+  h3{font-family:"Bricolage Grotesque", sans-serif; font-weight:700; font-size:1.12rem; margin:1.8rem 0 .5rem;}
+  p, ul, ol{max-width:72ch;}
+  ul, ol{padding-left:1.3rem;}
+  li{margin:.3rem 0;}
+  a{color:var(--accent); text-decoration-thickness:1px; text-underline-offset:2px;}
+  code{font-family:"Spline Sans Mono", ui-monospace, monospace; font-size:.86em; background:var(--code-bg); padding:.1em .35em; border-radius:4px;}
+  .lede{border-left:3px solid var(--accent); padding:.15rem 0 .15rem 1rem; color:var(--muted); max-width:70ch; margin:.25rem 0 1.25rem;}
+
+  .verdict{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.4rem 1.6rem; margin:2rem 0;}
+  .verdict h2{margin-top:0; font-size:1.25rem;}
+  .verdict ul{margin:.5rem 0 0;}
+
+  .chip{display:inline-block; font-family:"Spline Sans Mono", ui-monospace, monospace; font-size:.72rem; letter-spacing:.04em; padding:.12em .55em; border-radius:99px; white-space:nowrap; vertical-align:middle;}
+  .chip.ok{background:var(--accent-soft); color:var(--accent);}
+  .chip.warn{background:var(--warn-soft); color:var(--warn);}
+  .chip.risk{background:var(--risk-soft); color:var(--risk);}
+  .conf{font-family:"Spline Sans Mono", ui-monospace, monospace; font-size:.68rem; letter-spacing:.06em; color:var(--muted); border:1px solid var(--border); border-radius:4px; padding:.05em .4em; white-space:nowrap;}
+
+  .table-scroll{overflow-x:auto; border:1px solid var(--border); border-radius:10px; background:var(--surface); margin:1.25rem 0;}
+  table{border-collapse:collapse; width:100%; font-size:.92rem; min-width:720px;}
+  th{font-family:"Bricolage Grotesque", sans-serif; font-weight:700; text-align:left; background:var(--thead); padding:.6rem .8rem; border-bottom:1px solid var(--border); white-space:nowrap;}
+  td{padding:.55rem .8rem; border-bottom:1px solid var(--border); vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  td:first-child{font-weight:600;}
+  .num{font-variant-numeric:tabular-nums;}
+
+  .callout{border:1px solid var(--border); border-left:4px solid var(--warn); background:var(--surface); border-radius:8px; padding:.9rem 1.1rem; margin:1.25rem 0; max-width:78ch;}
+  .callout.good{border-left-color:var(--accent);}
+  .callout.bad{border-left-color:var(--risk);}
+  .callout p{margin:.2rem 0;}
+
+  .arch{display:flex; flex-direction:column; gap:.4rem; align-items:stretch; margin:1.5rem 0; max-width:820px;}
+  .arch-row{display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:.5rem;}
+  .arch-box{background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.55rem .7rem; font-size:.85rem; text-align:center;}
+  .arch-box b{display:block; font-family:"Bricolage Grotesque",sans-serif;}
+  .arch-box small{color:var(--muted); font-size:.75rem; line-height:1.3; display:block;}
+  .arch-box.hub{border-color:var(--accent); background:var(--accent-soft);}
+  .arch-arrow{text-align:center; color:var(--muted); font-size:.9rem; line-height:1;}
+
+  .spike{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1rem 1.2rem; margin:.8rem 0; max-width:78ch;}
+  .spike h3{margin:.1rem 0 .3rem;}
+  .spike .exit{font-size:.9rem; color:var(--muted);}
+  .spike .exit b{color:var(--ink);}
+
+  footer{margin-top:4rem; border-top:1px solid var(--border); padding-top:1.5rem; font-size:.85rem; color:var(--muted);}
+  @media (prefers-reduced-motion: reduce){ *{scroll-behavior:auto !important;} }
+</style>
+
+<div class="wrap">
+<header class="hero">
+  <p class="eyebrow">Feasibility study · analysis phase, no code</p>
+  <h1>Focus Modes for Android</h1>
+  <p class="standfirst">Recreating iPhone Focus modes as a third-party Android app: what the platform genuinely supports, what needs a workaround, what is impossible — every claim verified against current Android docs, AOSP source, and Play policy (September 2026).</p>
+  <div class="meta">
+    <span>Xiaomi 17T Pro · HyperOS 3 (Android 16→17)</span>
+    <span>OnePlus Nord 3 · OxygenOS 16 (final)</span>
+    <span>Kotlin · Compose · target SDK 36</span>
+  </div>
+</header>
+
+<div class="verdict">
+  <h2>Verdict in six lines</h2>
+  <ul>
+    <li><b>Your zen-rule architecture is correct and doc-confirmed</b> — one <code>AutomaticZenRule</code> per mode with <code>ZenPolicy</code> + <code>ZenDeviceEffects</code>, toggled via <code>setAutomaticZenRuleState</code>, is not just the best path but the <em>only</em> path for apps targeting Android 15+.</li>
+    <li><b>Per-app allowlists have no native API.</b> The notification-relay workaround (listener + your own DND-bypass channel) is viable and is the app's differentiator — spike-gated (spike #3) because it is the fragile piece on HyperOS; allowed <em>people</em> never depend on it.</li>
+    <li><b>Three iOS features degrade:</b> arbitrary per-contact allowlists (Android only knows starred/contacts/anyone), wallpaper <em>restore</em> (reading the current wallpaper throws on Android 14+), and a tamper-proof ongoing notification (dismissable since 14).</li>
+    <li><b>HyperOS is the real risk surface, not the SDK:</b> Xiaomi ships its own DND UI (your modes likely have no system management screen there), silently unbinds notification listeners, and gates everything behind Autostart + battery "No restrictions".</li>
+    <li><b>Play is survivable if you choose the low-risk lane:</b> no accessibility service, no <code>QUERY_ALL_PACKAGES</code>, no <code>USE_EXACT_ALARM</code>, defer background location. DND access, notification access, usage access, and overlays are all un-restricted today.</li>
+    <li><b>Locked scope (2026-09-30):</b> minSdk 35, MVP = one great tile + 3 modes, manual activation + schedule triggers, starred contacts as the people allowlist. Everything else — relay, Bluetooth/geofence/Wi-Fi/calendar/app-launch triggers, blocking, wallpaper swap — deferred or spike-gated. Full decision log in §11.</li>
+  </ul>
+</div>
+
+<h2><span class="secno">§0</span>Direction review — validate or challenge</h2>
+<p class="lede">Your proposed technical direction, line by line.</p>
+<div class="table-scroll"><table>
+<tr><th>Your proposal</th><th>Verdict</th><th>Notes</th></tr>
+<tr><td>One <code>AutomaticZenRule</code> per mode, <code>ZenPolicy</code> + <code>ZenDeviceEffects</code>, toggled via <code>setAutomaticZenRuleState</code></td><td><span class="chip ok">confirmed</span></td><td>Verbatim right, including the Android 15 rationale: apps targeting 35+ "can no longer change the global state or policy of DND" — calls to <code>setInterruptionFilter</code>/<code>setNotificationPolicy</code> now create an <em>implicit</em> zen rule. Nuances in §2.</td></tr>
+<tr><td><code>TileService</code> (active) + <code>showDialog</code>; test <code>requestAddTileService</code> on HyperOS</td><td><span class="chip ok">confirmed</span></td><td><code>showDialog</code> still works and collapses the shade (guard with <code>isLocked()</code>). Use the <code>PendingIntent</code> overload of <code>startActivityAndCollapse</code> (the Intent one throws on targetSdk 34+). <code>requestAddTileService</code> on HyperOS: no evidence either way — on-device test, with a manual fallback.</td></tr>
+<tr><td><code>NotificationListenerService</code> for per-app allowlists</td><td><span class="chip warn">confirmed, reframed</span></td><td>It's the only path, but the mechanism is a <em>relay</em>: you re-post through your own <code>setBypassDnd(true)</code> channel; you cannot "re-alert" the original notification. Fragile on HyperOS (silent unbind). §3.</td></tr>
+<tr><td><code>WallpaperManager</code> for wallpaper swaps</td><td><span class="chip warn">half right</span></td><td>Setting is a normal permission. <b>Reading the current wallpaper is dead</b>: Android 13 returns the default, 14+ throws <code>SecurityException</code> without <code>MANAGE_EXTERNAL_STORAGE</code> (Play won't grant it for this category). Design = user imports both wallpapers into the app. Dimming is native via <code>ZenDeviceEffects</code>.</td></tr>
+<tr><td>AlarmManager/WorkManager, geofencing, BT/Wi-Fi broadcasts, CalendarContract for triggers</td><td><span class="chip warn">mostly right</span></td><td>Corrections: WorkManager is unsuitable for minute-precise switching; <b>never ship <code>USE_EXACT_ALARM</code></b> (Play blocks non-alarm/calendar apps); Wi-Fi SSID has no dead-process path anymore and is the most expensive trigger; Bluetooth ACL broadcasts are the only free ones. §4.</td></tr>
+<tr><td>App blocking via AccessibilityService or UsageStats + overlay</td><td><span class="chip risk">choose one lane</span></td><td>For Play: UsageStats + overlay (low policy risk, ~1–3 s latency, soft enforcement). Accessibility is medium-high rejection risk and the policy's "use narrower APIs when possible" clause is aimed exactly at this. Never ship both mechanisms. Post-MVP either way.</td></tr>
+<tr><td>Kotlin, Compose, latest targetSdk</td><td><span class="chip ok">confirmed</span></td><td>targetSdk 36. <b>minSdk recommendation: 35</b> for the personal phase — every relevant API (<code>AutomaticZenRule.Builder</code>, <code>ZenDeviceEffects</code>, <code>Condition.SOURCE_USER_ACTION</code>, Modes UI) is API 35+, and both test devices qualify. Decide a backport floor (realistically 29/31, losing device effects and the modern rule metadata below 35) only if/when you go to Play.</td></tr>
+</table></div>
+
+<h2><span class="secno">§1</span>Feasibility matrix</h2>
+<p class="lede">Feature × approach × permission × risk. Confidence reflects the research verification level, not gut feel.</p>
+<div class="table-scroll"><table>
+<tr><th>Feature</th><th>Approach</th><th>Permission / access</th><th>Risk</th><th>Confidence</th></tr>
+<tr><td>User-defined modes (name, icon, colour)</td><td><code>AutomaticZenRule.Builder</code> + <code>setIconResId</code> / <code>setType</code> / <code>setTriggerDescription</code> (all API 35); own Room record for colour</td><td>DND access (<code>ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS</code>)</td><td><span class="chip ok">native</span></td><td><span class="conf">verified</span></td></tr>
+<tr><td>Allowed people: starred / contacts / anyone / repeat callers, calls vs messages</td><td><code>ZenPolicy.allowCalls</code> / <code>allowMessages</code> (PEOPLE_TYPE_*) / <code>allowRepeatCallers</code> / <code>allowConversations</code></td><td>DND access</td><td><span class="chip ok">native</span></td><td><span class="conf">verified</span></td></tr>
+<tr><td>Allowed people: <em>arbitrary specific contacts</em></td><td><b>No API.</b> Approximation: starred contacts <em>are</em> the allowlist (deep-link the user to star people)</td><td>—</td><td><span class="chip risk">not possible natively</span></td><td><span class="conf">verified (absence)</span></td></tr>
+<tr><td>Allowed apps break through DND</td><td>Notification relay: NLS reads allowlisted app's notification → re-posts via own <code>setBypassDnd(true)</code> channel; <code>ZenPolicy.allowPriorityChannels(true)</code></td><td>DND access + Notification access</td><td><span class="chip warn">workaround</span></td><td><span class="conf">verified mechanics · likely UX</span></td></tr>
+<tr><td>Greyscale per mode</td><td><code>ZenDeviceEffects.setShouldDisplayGrayscale</code> (API 35; honored for third-party rules per AOSP)</td><td>DND access</td><td><span class="chip ok">native 35+</span></td><td><span class="conf">verified · HyperOS untested</span></td></tr>
+<tr><td>Dimmed wallpaper per mode</td><td><code>ZenDeviceEffects.setShouldDimWallpaper</code></td><td>DND access</td><td><span class="chip ok">native 35+</span></td><td><span class="conf">verified</span></td></tr>
+<tr><td>Dark theme per mode</td><td><code>ZenDeviceEffects.setShouldUseNightMode</code>; curiosity: AOSP shows <code>UiModeManager.setNightMode</code> is un-gated on unmanaged devices</td><td>DND access</td><td><span class="chip ok">native 35+</span></td><td><span class="conf">verified · fallback uncertain</span></td></tr>
+<tr><td>Wallpaper swap (home/lock)</td><td><code>WallpaperManager.setBitmap</code> w/ <code>FLAG_SYSTEM</code>/<code>FLAG_LOCK</code>; user imports both "normal" and "mode" wallpapers in-app (restore-by-reading impossible on 13+)</td><td><code>SET_WALLPAPER</code> (normal)</td><td><span class="chip warn">workaround</span></td><td><span class="conf">verified</span></td></tr>
+<tr><td>QS tile: tap toggles, dialog picker, long-press settings</td><td>Active <code>TileService</code> + <code>showDialog</code> + exported <code>QS_TILE_PREFERENCES</code> activity</td><td>—</td><td><span class="chip ok">native</span></td><td><span class="conf">verified · HyperOS uncertain</span></td></tr>
+<tr><td>One tile per mode</td><td>N static <code>TileService</code>s toggled with <code>setComponentEnabledSetting</code> (Home Assistant pattern); disabled tiles lose shade position</td><td>—</td><td><span class="chip warn">workaround</span></td><td><span class="conf">likely</span></td></tr>
+<tr><td>Schedule trigger</td><td><code>setExactAndAllowWhileIdle</code>, reschedule on fire + <code>BOOT_COMPLETED</code></td><td><code>SCHEDULE_EXACT_ALARM</code> (default-deny 14+, settings grant)</td><td><span class="chip ok">native</span></td><td><span class="conf">verified</span></td></tr>
+<tr><td>Bluetooth device trigger</td><td>Manifest receiver for <code>ACTION_ACL_CONNECTED/DISCONNECTED</code> (implicit-broadcast exempt → wakes dead process)</td><td><code>BLUETOOTH_CONNECT</code> (runtime)</td><td><span class="chip ok">native</span></td><td><span class="conf">verified</span></td></tr>
+<tr><td>Geofence trigger</td><td>Play services <code>GeofencingClient</code> → PendingIntent receiver; 2–6 min latency; GMS-only</td><td>Fine + <b>background location</b></td><td><span class="chip warn">technical ok · Play risk</span></td><td><span class="conf">verified</span></td></tr>
+<tr><td>Wi-Fi SSID trigger</td><td>Persistent FGS holding <code>NetworkCallback(FLAG_INCLUDE_LOCATION_INFO)</code>; no dead-process broadcast exists</td><td>Fine + background location + Location toggle on + FGS type</td><td><span class="chip risk">expensive</span></td><td><span class="conf">verified</span></td></tr>
+<tr><td>Calendar trigger</td><td>Poll <code>CalendarContract.Instances</code> → plant exact alarms; refresh via JobScheduler <code>TriggerContentUri</code></td><td><code>READ_CALENDAR</code></td><td><span class="chip warn">workaround</span></td><td><span class="conf">verified mechanics</span></td></tr>
+<tr><td>App-launch trigger</td><td>UsageStats polling from FGS (~1–3 s latency, moderate battery) — or AccessibilityService (instant, Play risk)</td><td>Usage access (+ FGS), or Accessibility</td><td><span class="chip risk">costly either way</span></td><td><span class="conf">verified</span></td></tr>
+<tr><td>Pause/block distracting apps</td><td>UsageStats foreground detection + <code>SYSTEM_ALERT_WINDOW</code> block screen (soft enforcement, dismissible)</td><td>Usage access + overlay</td><td><span class="chip warn">workaround</span></td><td><span class="conf">verified policy · likely UX</span></td></tr>
+<tr><td>Ongoing "mode active" notification with turn-off action</td><td>Plain <code>notify()</code> from any context, action via broadcast PendingIntent; <b>dismissable by user since Android 14</b></td><td><code>POST_NOTIFICATIONS</code></td><td><span class="chip ok">native, softened</span></td><td><span class="conf">verified</span></td></tr>
+</table></div>
+
+<h2><span class="secno">§2</span>The zen-rule engine — nuances that will bite</h2>
+<p>These four behaviors are doc/AOSP-verified and each one, missed, produces a "works on my machine, then mysteriously stops" bug:</p>
+<ul>
+  <li><b>User edits freeze your rule, silently.</b> Once the user modifies an app-owned mode in Settings (any field), <code>updateAutomaticZenRule</code> silently discards all your changes except the rule name — no exception. Delete + re-add with the same condition does <em>not</em> escape: the system restores the user's customizations from a deleted-rule cache. Treat rules as write-once; read state back instead of assuming. <b>Defuse:</b> Room is the source of truth and the system rule is a cache — on every apply, read back <code>getAutomaticZenRule</code>, diff against desired, and when frozen show a "managed in system settings" badge deep-linking to <code>ACTION_AUTOMATIC_ZEN_RULE_SETTINGS</code>. On HyperOS (no Modes UI) the freeze likely cannot even occur.</li>
+  <li><b>Manual deactivation snoozes your rule.</b> After the user turns a mode off manually, your <code>STATE_TRUE</code> is ignored until you send <code>STATE_FALSE</code> first — <em>unless</em> the <code>Condition</code> carries <code>Condition.SOURCE_USER_ACTION</code> (API 35), which always applies. Rule: tile/app toggles → <code>SOURCE_USER_ACTION</code>; schedules → <code>SOURCE_SCHEDULE</code>; geofence/BT → <code>SOURCE_CONTEXT</code>. <b>Defuse:</b> one <code>ZenAdapter</code> chokepoint; every call site declares its source, and the mapping is unit-tested. For schedules we deliberately <em>accept</em> the snooze for the current cycle (the user said no — fighting them is wrong UX and matches iOS) and send <code>STATE_FALSE</code> at cycle end so the next cycle re-arms cleanly.</li>
+  <li><b>A rule needs an owner.</b> <code>addAutomaticZenRule</code> throws unless the rule has a <code>ConditionProviderService</code> or — the modern path — a configuration activity handling <code>ACTION_AUTOMATIC_ZEN_RULE</code>. Budget one such activity per app. <b>Defuse:</b> ship it from day one — it doubles as the mode editor.</li>
+  <li><b>Pure-effect modes exist.</b> A rule with <code>INTERRUPTION_FILTER_ALL</code> filters nothing but still applies <code>ZenDeviceEffects</code> — so "Reading mode = greyscale only, all notifications through" is a first-class citizen.</li>
+</ul>
+<p><b>The umbrella mitigation is a reconciliation loop, not event-perfect plumbing.</b> ModeEngine never assumes a past event succeeded: on every wake — alarm fire, boot, tile tap, app open — it recomputes the desired mode from the wall clock and trigger state, reads the actual zen-rule state back, and converges the two idempotently. A missed alarm or a killed process then heals at the next wake instead of leaving the wrong mode active all day. This desired-vs-actual model is what makes the app survivable on an unreliable substrate, which is exactly what HyperOS is.</p>
+<p>Conflict semantics with the user's own DND: when multiple rules/modes are active (including the system's), the platform combines them <b>most-restrictive-wins per policy field</b> (readable via <code>getConsolidatedNotificationPolicy()</code>). Practical consequence for the app: enforce a <b>single-active-mode invariant</b> — activating a mode sends <code>STATE_FALSE</code> to all others — so the device state stays predictable. Also note DND access cannot be granted on work profiles.</p>
+
+<h3>Priority rules when triggers overlap</h3>
+<p>Proposed policy (app-level, since the OS would otherwise just intersect policies):</p>
+<ol>
+  <li><b>Manual always wins</b> and pins the mode until manually cleared or its own end-condition fires.</li>
+  <li>Contextual triggers (geofence, Bluetooth, app-launch, calendar) beat schedules; among contextual, most-recently-triggered wins.</li>
+  <li>When the winning mode ends, re-evaluate every trigger predicate and activate the highest-priority mode still true (schedules re-assert themselves this way after a temporary override).</li>
+  <li>Expose an optional per-mode priority integer later only if real conflicts show up in use.</li>
+</ol>
+
+<h2><span class="secno">§3</span>Per-app allowlist: the relay mechanism</h2>
+<p class="lede">The direct answer to "can allowed apps reliably break through DND?"</p>
+<p><b>Not natively — ZenPolicy filters by people, categories, conversations, and channel-bypass only.</b> The viable mechanism, used with DND access granted:</p>
+<ol>
+  <li>Create one notification channel owned by your app with <code>NotificationChannel.setBypassDnd(true)</code> — allowed because you hold DND access, but <b>only until the user edits that channel's settings</b>, after which the bypass flag is frozen to whatever it was.</li>
+  <li>Set <code>ZenPolicy.allowPriorityChannels(true)</code> on your modes (API 35 default behavior otherwise controlled by the user's mode settings).</li>
+  <li>In <code>onNotificationPosted</code>, when the source package is on the active mode's allowlist, re-post a summary through the bypass channel, reusing the original's <code>contentIntent</code> (a <code>PendingIntent</code> is a token — tapping your relay opens the original app's target).</li>
+</ol>
+<p><b>Latency:</b> effectively instant — the listener is called synchronously on post. <b>Sound/vibration:</b> comes from <em>your</em> channel's sound settings, not the source app's — a per-mode or per-source-app sound is configurable, but it will never be "WhatsApp's exact tone" unless the user picks it. <b>Attribution:</b> the relay visibly comes from your app (small icon, app name); Play's system-functionality policy requires keeping that honest — don't pixel-perfect impersonate the source notification.</p>
+<div class="callout bad">
+  <p><b>Fragility budget (this is why the feature is spike-gated):</b> HyperOS 3 is documented to silently unbind notification listeners while Settings still shows access as granted (the HyperBridge project shipped a reconnect-watchdog specifically for this). The relay therefore needs: an <code>onListenerDisconnected</code> → <code>requestRebind</code> watchdog, a staleness canary (e.g. periodic self-notification check), and a visible "relay is down, tap to fix" state. Heads-up display of the relay on HyperOS additionally depends on the per-app "Floating notifications" toggle.</p>
+</div>
+<p><b>Blast-radius design:</b> the relay is post-MVP and per-mode opt-in; calls and messages from starred people break through via system-enforced <code>ZenPolicy</code>, never via the relay — so a dead listener degrades only the app-allowlist extra, not the critical people channel. When the watchdog detects a down relay, it says so loudly (through the bypass channel itself and the health screen) rather than failing silent.</p>
+<p>Also worth knowing: MessagingStyle conversations, direct-reply actions, and grouped messages can be partially reconstructed (original <code>Notification.actions</code> carry reusable PendingIntents, including RemoteInputs) — how much survives relaying is part of the spike.</p>
+
+<h2><span class="secno">§4</span>Triggers: cost sheet</h2>
+<div class="table-scroll"><table>
+<tr><th>Trigger</th><th>Wakes dead process?</th><th>Latency</th><th>Battery</th><th>Permission friction</th></tr>
+<tr><td>Schedule</td><td>yes (alarm + boot receiver)</td><td class="num">sub-second</td><td>negligible</td><td>"Alarms &amp; reminders" settings grant on 14+ (default-deny)</td></tr>
+<tr><td>Bluetooth device</td><td><b>yes</b> (manifest ACL broadcast)</td><td class="num">&lt; 2 s</td><td>negligible</td><td>one runtime prompt (<code>BLUETOOTH_CONNECT</code>)</td></tr>
+<tr><td>Geofence</td><td>yes (GMS PendingIntent)</td><td class="num">2–6 min</td><td>low</td><td>fine + background location ("Allow all the time" via Settings); GMS required; Play declaration + video</td></tr>
+<tr><td>Calendar</td><td>via planted alarms + <code>TriggerContentUri</code> job</td><td class="num">exact once planned</td><td>low</td><td><code>READ_CALENDAR</code> runtime prompt</td></tr>
+<tr><td>Wi-Fi SSID</td><td><b>no</b> — needs persistent FGS</td><td class="num">1–5 s</td><td>low-moderate (the FGS is the cost)</td><td>fine + background location + device Location on + FGS type declaration</td></tr>
+<tr><td>App launch</td><td>no — FGS polling (or Accessibility)</td><td class="num">1–3 s (poll) / &lt;300 ms (a11y)</td><td>moderate (poll) / negligible (a11y)</td><td>Usage access special grant; a11y = Play risk</td></tr>
+</table></div>
+<p>Scope decision (2026-09-30): <b>MVP triggers are manual + schedule only.</b> Bluetooth remains the cheapest future trigger (near-free, wakes a dead process) if appetite ever returns; geofence is a later optional feature; Wi-Fi and app-launch stay shelved — both drag in a permanent foreground service. The table stands as the reference for that future conversation.</p>
+
+<h2><span class="secno">§5</span>The tile is the product</h2>
+<p class="lede">Day to day, the Quick Settings tile <em>is</em> the app. iOS Control Center is the bar; this is the interaction contract the implementation is held to.</p>
+<ul>
+  <li><b>Tap acts, never asks.</b> Off → activate the last-used mode with an optimistic tile flip; on → deactivate. Budget: tile visually flips in <span class="num">&lt;100 ms</span>; DND verified active in <span class="num">&lt;500 ms</span> (measured in spike #2). The dialog picker appears only when there is genuine ambiguity — no last-used mode, or the user opted into "always ask".</li>
+  <li><b>Long-press = the iOS expand gesture.</b> The exported <code>QS_TILE_PREFERENCES</code> activity opens as a fast, focused mode picker with an entry into full settings — not a generic settings dump.</li>
+  <li><b>Truthful state, always.</b> Subtitle shows the active mode's name (<code>Tile.setSubtitle</code>, API 30); the tile glyph swaps to the active mode's icon (monochrome — mode colour lives in-app). State is confirmed via the rule-status broadcasts + <code>requestListeningState</code>, so the tile is never stale after the mode changes from any other surface (schedule, app, system).</li>
+  <li><b>Locked device:</b> toggling works from the lock screen (nothing sensitive shown); the picker goes through <code>unlockAndRun</code>.</li>
+  <li><b>Feedback:</b> subtle confirmation haptic on toggle; the ongoing notification updates in the same beat so shade and tile always agree.</li>
+  <li><b>Implementation watch-outs:</b> <code>showDialog</code> takes a classic <code>Dialog</code> from a service context — hosting Compose there needs manual lifecycle-owner wiring (spike #2 decides Compose-in-dialog vs a hand-crafted View dialog); activity launches use <code>startActivityAndCollapse(PendingIntent)</code> only; on HyperOS, expect the manual add-tile path (§6).</li>
+  <li><b>Per-mode tiles:</b> deferred — the component-toggle pattern loses shade position and clutters the picker; revisit only if one-tap-per-mode proves necessary in daily use.</li>
+</ul>
+
+<h2><span class="secno">§6</span>HyperOS &amp; OxygenOS playbook</h2>
+<p class="lede">The OEM layer is where this app lives or dies. Everything below is community/vendor-verified, not SDK-documented.</p>
+<h3>How your modes will look on each device</h3>
+<ul>
+  <li><b>HyperOS (17T Pro):</b> Xiaomi ships its own DND UI and there is no evidence the AOSP <b>Modes</b> settings screen exists on HyperOS 3 — your zen rules will likely work via API but have <b>no system management surface</b>; your app is the only UI. Xiaomi's own DND layer has documented bugs (random self-activation, schedules not releasing). Spike #1 verifies a third-party rule actually silences Xiaomi's notification pipeline. Note your 17T Pro is receiving stable <b>Android 17 (HyperOS 3.3)</b> right now — test on both bases.</li>
+  <li><b>OxygenOS 16 (Nord 3, final update):</b> near-stock DND/Modes surfaces; the risk here is process death, not API divergence.</li>
+</ul>
+<h3>Onboarding checklist the app must walk users through</h3>
+<ol>
+  <li><b>Xiaomi:</b> Autostart (Security app) <em>and</em> battery "No restrictions" — <b>two independent gates, both required</b>, neither requestable via API (the MIUI-autostart library can only detect). Lock the app in recents (may not survive reboot). "Other permissions" → "Display pop-up windows while running in background" if any trigger ever launches UI. "Floating notifications" enabled for the app so relayed notifications banner. Last resort: disable MIUI optimization.</li>
+  <li><b>OnePlus:</b> Battery → "Don't optimize", disable Sleep standby optimization and auto-launch management — and warn users that <b>OxygenOS randomly reverts the exemption</b>, so ship a recurring health-check screen (re-verify listener bound, alarm fired on time, exemption still set), not a one-time wizard.</li>
+  <li><b>Both:</b> DND-access grant screens have historically been buried/hidden on Xiaomi — handle the settings intent failing and provide manual navigation instructions.</li>
+</ol>
+<h3>Quick Settings on HyperOS</h3>
+<p>Third-party tiles appear but are buried at the end of the control-center edit list; the first four toggle slots are locked. <code>requestAddTileService</code> is unverified on HyperOS (works on AOSP-close ROMs; auto-denies after repeated refusals everywhere) — always ship the manual "Edit control center → scroll down" instruction as fallback. Expect exact alarms to drift 1–2 minutes on Xiaomi even when whitelisted; treat that as acceptable for mode switching.</p>
+
+<h2><span class="secno">§7</span>Play Store risk register</h2>
+<div class="table-scroll"><table>
+<tr><th>Mechanism</th><th>Play status (Sept 2026)</th><th>Obligations</th><th>Risk</th></tr>
+<tr><td>DND access (<code>ACCESS_NOTIFICATION_POLICY</code>)</td><td>Not on any restricted list</td><td>Deceptive-behavior clause: settings changes need consent + easy reversal (onboarding covers it)</td><td><span class="chip ok">low</span></td></tr>
+<tr><td>Notification access (NLS)</td><td>No declaration form exists</td><td>Data-safety accuracy; keep notification content on-device; honest attribution of relayed notifications</td><td><span class="chip ok">low</span> (on-device)</td></tr>
+<tr><td><code>SCHEDULE_EXACT_ALARM</code></td><td>Acceptable broadly</td><td>None beyond the user grant</td><td><span class="chip ok">low</span></td></tr>
+<tr><td><code>USE_EXACT_ALARM</code></td><td>Restricted to alarm-clock/calendar apps</td><td><b>Do not ship</b> — publish-blocking for this category</td><td><span class="chip risk">blocking</span></td></tr>
+<tr><td>App picker via <code>&lt;queries&gt;</code> launcher intent</td><td>No declaration required (the form binds to <code>QUERY_ALL_PACKAGES</code>, which you avoid)</td><td>Keep app inventory on-device; Google knows this loophole, could tighten</td><td><span class="chip ok">low</span></td></tr>
+<tr><td>Usage access + <code>SYSTEM_ALERT_WINDOW</code> (blocking)</td><td>Neither is restricted; established Digital-Detox category pattern</td><td>No ads/system-mimicry in overlays; only block user-selected apps</td><td><span class="chip ok">low</span></td></tr>
+<tr><td>AccessibilityService (blocking / app-launch)</td><td>Declaration + prominent disclosure + video; must <em>not</em> claim <code>isAccessibilityTool</code>; "use narrower APIs" clause; Oct 2025 update permits deterministic rule automation</td><td>Reviewer-dependent; documented rejections resolved by removing the service</td><td><span class="chip risk">medium-high</span></td></tr>
+<tr><td><code>ACCESS_BACKGROUND_LOCATION</code> (geofence)</td><td>Declaration + ≤30 s video + prominent disclosure; "could it work without it?" is the kill question — and for a focus app the honest answer is yes; Jan 2027 policy preview tightens further</td><td>Defer from v1, or frame the geofence feature as genuinely core</td><td><span class="chip risk">medium-high</span></td></tr>
+</table></div>
+<div class="callout good"><p><b>De-risking pattern proven by precedent apps</b> (BuzzKill, AppBlock, Tasker): all-on-device architecture, ideally <b>no INTERNET permission</b> in the core app. That single choice collapses the Data-safety story for notification content, app inventory, and usage data — all classified as personal/sensitive.</p></div>
+
+<h2><span class="secno">§8</span>Architecture proposal</h2>
+<p class="lede">Modest modularization — one app module with enforced package layers is fine at MVP scale; split into Gradle modules when the trigger zoo grows.</p>
+<div class="arch">
+  <div class="arch-row">
+    <div class="arch-box"><b>Tile</b><small>TileService, dialog picker</small></div>
+    <div class="arch-box"><b>Alarms</b><small>schedule receiver, boot</small></div>
+    <div class="arch-box"><b>Geofence</b><small>GMS PendingIntent receiver</small></div>
+    <div class="arch-box"><b>Bluetooth</b><small>ACL manifest receiver</small></div>
+    <div class="arch-box"><b>App UI</b><small>Compose, manual toggle</small></div>
+  </div>
+  <div class="arch-arrow">▼ TriggerEvent(source, modeId, direction)</div>
+  <div class="arch-row">
+    <div class="arch-box hub"><b>ModeEngine</b><small>single reducer · priority policy · single-active invariant · idempotent apply</small></div>
+  </div>
+  <div class="arch-arrow">▼ desired state</div>
+  <div class="arch-row">
+    <div class="arch-box"><b>ZenAdapter</b><small>rule CRUD, setAutomaticZenRuleState + Condition source</small></div>
+    <div class="arch-box"><b>EffectsAdapter</b><small>wallpaper swap (imported files)</small></div>
+    <div class="arch-box"><b>StatusNotifier</b><small>ongoing notification</small></div>
+    <div class="arch-box"><b>RelayService</b><small>NLS + bypass channel + watchdog</small></div>
+  </div>
+  <div class="arch-arrow">▲▼ Room + DataStore (Flow) — modes, triggers, active state — observed by UI &amp; tile</div>
+</div>
+<h3>Data model</h3>
+<ul>
+  <li><code>Mode</code>: id, name, iconKey, colour, zenRuleId (nullable until registered), interruption policy (people level for calls/messages, repeat callers, conversations), effects (greyscale, dimWallpaper, nightMode), wallpaperHome/Lock (imported file refs, nullable), allowedApps [pkg], blockedApps [pkg].</li>
+  <li><code>Trigger</code>: id, modeId, type (SCHEDULE | BLUETOOTH | GEOFENCE | CALENDAR | WIFI | APP_LAUNCH), typed params (serialized), enabled.</li>
+  <li><code>ActiveState</code> (DataStore, single source of truth): activeModeId, activationSource, since, pinnedByUser.</li>
+</ul>
+<p>Key invariants: every entry point (tile tap, receiver, boot) funnels a <code>TriggerEvent</code> into ModeEngine — nothing toggles a zen rule directly; ModeEngine's apply step is idempotent and reads back actual rule state (because user edits can freeze rules, §2); boot receiver re-plants alarms (and, if triggers return later, geofences), never starts an FGS (Android 15 restricts BOOT_COMPLETED FGS types).</p>
+
+<h2><span class="secno">§9</span>MVP — smallest version worth using daily</h2>
+<ul>
+  <li>3 seed modes (Work, Sleep, Personal), editable: name, icon, colour, people policy (starred / contacts / anyone + repeat callers), device effects (greyscale, dim wallpaper, dark theme).</li>
+  <li><b>Manual activation as the primary flow</b> — the tile per the §5 contract, in-app toggles, and <code>setManualInvocationAllowed(true)</code> so modes are toggleable from any surface the OS offers.</li>
+  <li>Schedule triggers, backed by the reconciliation loop (§2) so a missed alarm self-heals.</li>
+  <li><b>Starred-contacts guidance:</b> an onboarding card that says plainly "people allowed through = your starred contacts", shows the current starred list (optional <code>READ_CONTACTS</code> — the feature works without it), and one-tap opens the Contacts app to star someone. Repeat-callers on by default (iOS parity: a second call within minutes is probably urgent).</li>
+  <li>Ongoing notification with "turn off" action (informational — dismissable since Android 14).</li>
+  <li>Setup &amp; health screen: DND access, exact-alarm grant, Xiaomi/OnePlus checklist, and a <em>recurring</em> health check (OxygenOS reverts exemptions; HyperOS unbinds listeners).</li>
+  <li>minSdk 35, targetSdk 36, no INTERNET permission.</li>
+</ul>
+<p><b>Explicitly out of MVP:</b> per-app allowlist relay (gated on spike #3), all context triggers (Bluetooth, geofence, Wi-Fi, calendar, app-launch), app blocking, wallpaper swap (dropped for now), per-mode tiles.</p>
+
+<h2><span class="secno">§10</span>Technical spikes, in order</h2>
+<p class="lede">Reordered after the scope decisions: the MVP-critical spikes come first; the relay spike now gates a post-MVP feature rather than blocking the start.</p>
+<div class="spike"><h3>1 · Zen rules on HyperOS <span class="chip risk">existential</span></h3><p>Create/activate a rule with policy + effects; verify Xiaomi's pipeline actually silences; find the DND-access grant screen; test <code>SOURCE_USER_ACTION</code> vs snooze-override; check whether any Modes management UI exists on HyperOS 3/3.3 (Android 16 and 17 bases).</p><p class="exit"><b>Exit:</b> a mode toggled from code demonstrably filters notifications and applies greyscale/dark on HyperOS. If this fails, the whole approach is renegotiated — nothing else matters until it passes.</p></div>
+<div class="spike"><h3>2 · Tile feel <span class="chip ok">MVP-critical</span></h3><p>The §5 contract, measured: <code>requestAddTileService</code> on HyperOS, optimistic-flip latency, tap-to-DND-active timing, <code>showDialog</code> picker (Compose-in-dialog vs View dialog), long-press preferences activity, locked-device behavior, subtitle/icon updates from external state changes.</p><p class="exit"><b>Exit:</b> tap-to-active measured &lt;500 ms on both devices; documented add-tile path per device; a picker that feels instant.</p></div>
+<div class="spike"><h3>3 · Notification relay breakthrough <span class="chip warn">gates the allowlist feature</span></h3><p>NLS + <code>setBypassDnd</code> channel on 17T Pro and Nord 3: does the relay sound/vibrate/head-up under an active mode; latency; RemoteInput reply survival; behavior after user edits the channel; HyperOS listener-unbind watchdog.</p><p class="exit"><b>Exit:</b> relayed WhatsApp message audibly breaks through DND on both devices within 2 s, and the watchdog detects a forced unbind. Kills or confirms the future flagship feature.</p></div>
+<div class="spike"><h3>4 · Schedule reliability &amp; process death</h3><p>Exact-alarm drift on HyperOS with/without Autostart + No-restrictions; boot re-registration; force-stop/swipe-away matrix; Nord 3 exemption-revert behavior; verify the reconciliation loop heals a deliberately missed alarm.</p><p class="exit"><b>Exit:</b> measured worst-case drift table + minimum required setup per device, feeding the onboarding copy verbatim.</p></div>
+
+<h2><span class="secno">§11</span>Decision log — resolved 2026-09-30</h2>
+<div class="table-scroll"><table>
+<tr><th>Question</th><th>Decision</th><th>Consequence</th></tr>
+<tr><td>Play ambition</td><td>Build the low-risk lane regardless; MVP focus above all</td><td>No accessibility service, no <code>QUERY_ALL_PACKAGES</code>, no <code>USE_EXACT_ALARM</code>, no INTERNET permission</td></tr>
+<tr><td>Specific contacts</td><td>Starred contacts accepted as the allowlist</td><td>MVP includes the guidance card: explain the model, show current starred, one-tap to the Contacts app to star people</td></tr>
+<tr><td>Geofencing</td><td>Later optional feature — not now</td><td>No location permissions anywhere in the MVP</td></tr>
+<tr><td>App blocking</td><td>Post-MVP; revisit after a month of daily use</td><td>If ever built: UsageStats + overlay, never accessibility</td></tr>
+<tr><td>Mode stacking</td><td>Single-active-mode confirmed</td><td>ModeEngine enforces the invariant; activating one mode deactivates the rest</td></tr>
+<tr><td>Wallpaper swap</td><td>Dropped for now (nice-to-have)</td><td>Removed from MVP and roadmap; the import-model design in §1 stands if it ever returns</td></tr>
+<tr><td>minSdk</td><td>35 confirmed for phase 1</td><td>Play floor decided later with real market data</td></tr>
+<tr><td>Triggers (added)</td><td>Manual entry is the primary flow; schedule is the only automated trigger in MVP</td><td>Bluetooth/geofence/Wi-Fi/calendar/app-launch all deferred — §4 table kept as future reference</td></tr>
+<tr><td>UX bar (added)</td><td>The tile must feel as good as iOS Control Center</td><td>§5 interaction contract; spike #2 measures it before UI work starts</td></tr>
+</table></div>
+
+<footer>
+  <p>Verified against developer.android.com references (updated 2026-08), AOSP main (<code>ZenModeHelper</code>, <code>ZenModeConfig</code>, <code>UiModeManagerService</code>), Play policy center (post-2025 restructure, incl. the Jan 2027 preview), dontkillmyapp.com, and vendor/community sources (Tasker, MacroDroid, HyperBridge, Transistorsoft, xiaomi.eu, XDA). Key references: <a href="https://developer.android.com/about/versions/15/behavior-changes-15">Android 15 behavior changes</a> · <a href="https://developer.android.com/reference/android/service/notification/ZenPolicy">ZenPolicy</a> · <a href="https://developer.android.com/reference/android/service/notification/ZenDeviceEffects">ZenDeviceEffects</a> · <a href="https://developer.android.com/develop/ui/views/quicksettings-tiles">Quick Settings tiles</a> · <a href="https://developer.android.com/develop/background-work/services/alarms/schedule">Alarms</a> · <a href="https://developer.android.com/develop/sensors-and-location/location/geofencing">Geofencing</a> · <a href="https://support.google.com/googleplay/android-developer/answer/16558241">Play sensitive permissions</a> · <a href="https://support.google.com/googleplay/android-developer/answer/10964491">Accessibility policy</a> · <a href="https://dontkillmyapp.com/xiaomi">dontkillmyapp/xiaomi</a>. Analysis date: 2026-09-30.</p>
+</footer>
+</div>
