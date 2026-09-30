@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Deliberately NO android.permission.INTERNET: the spike, like the real app,
+      must be provably offline.
+    -->
+    <!-- Normal permission; the *access grant* is still a separate user action. -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.ZenSpike">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          Owner of the AutomaticZenRule. addAutomaticZenRule() throws unless the rule
+          names an owner; a configuration activity qualifies only if it is exported and
+          declares ACTION_AUTOMATIC_ZEN_RULE plus the ruleType meta-data.
+        -->
+        <activity
+            android:name=".RuleConfigActivity"
+            android:exported="true"
+            android:label="@string/rule_config_label">
+            <intent-filter>
+                <action android:name="android.app.action.AUTOMATIC_ZEN_RULE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.zen.automatic.ruleType"
+                android:value="@string/rule_type" />
+            <meta-data
+                android:name="android.service.zen.automatic.ruleInstanceLimit"
+                android:value="1" />
+        </activity>
+    </application>
+
+</manifest>
