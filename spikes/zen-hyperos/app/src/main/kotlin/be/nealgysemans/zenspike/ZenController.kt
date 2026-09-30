@@ -85,6 +85,11 @@ class ZenController(context: Context) {
         }
     }
 
+    /**
+     * Only meaningful because the manifest declares both actions in `<queries>`:
+     * under package-visibility filtering this returns null for any action we have
+     * not declared, regardless of whether the device can actually handle it.
+     */
     private fun resolves(action: String): Boolean =
         Intent(action).resolveActivity(appContext.packageManager) != null
 

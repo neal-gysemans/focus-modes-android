@@ -77,6 +77,12 @@ Run the whole sequence on each device and fill the table. Every step's outcome i
 also in the on-screen log — copy it out with `adb logcat -s ZenSpike:I -d` and
 attach it to `docs/` if anything is surprising.
 
+> The **"Modes UI present"** and **"DND-access screen reachable"** rows are read via
+> `resolveActivity`, which only works because the manifest declares both Settings
+> actions in `<queries>`. Under package-visibility filtering (Android 11+) an
+> undeclared action always resolves to null — so if either row ever reads `no` on
+> every device at once, check that declaration before believing the result.
+
 0. Fresh install. Note what the status header says **before** granting anything.
 1. **Grant DND access** → return to the app. Header should flip to `YES`.
 2. **Create rule** → log shows `addAutomaticZenRule -> id=…`, then a read-back.
