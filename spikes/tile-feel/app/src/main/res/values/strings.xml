@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Tile Feel Spike</string>
+
+    <!-- Tile labels. HARD LIMIT: keep <= 18 characters or the QS edit list truncates. -->
+    <string name="tile_label_focus">Focus</string>
+    <string name="tile_label_second">Focus: Sleep</string>
+
+    <string name="tile_prefs_label">Pick focus</string>
+    <string name="zen_rule_name">Tile Feel Spike</string>
+    <string name="zen_rule_type">Focus</string>
+</resources>
