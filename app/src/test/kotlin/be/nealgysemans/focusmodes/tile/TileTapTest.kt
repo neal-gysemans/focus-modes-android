@@ -291,7 +291,9 @@ class TileTapTest {
 
     @Test
     fun `the widget button asks when there is nothing to re-activate`() {
-        // "Ask" from the widget means "open the picker activity"; it cannot show a dialog.
+        // "Ask" from the widget's toggle zone means "start FocusPickerActivity" — the same
+        // place its chevron zone goes. There is no dialog for a RemoteViews click to show,
+        // so a translucent activity is the picker.
         assertEquals(TileTap.Ask, snapshot(lastUsedModeId = null).toggleLastUsed())
     }
 
