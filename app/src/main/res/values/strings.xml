@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Focus Modes</string>
+    <string name="tile_label">Focus</string>
+
+    <string name="zen_trigger_description">Managed by Focus Modes</string>
+
+    <string name="channel_status_name">Active mode</string>
+    <string name="channel_status_description">Shows which focus mode is on, with a shortcut to turn it off.</string>
+
+    <string name="health_dnd_access_missing">Focus Modes needs Do Not Disturb access before it can turn a mode on. Grant it in Settings.</string>
+
+    <!-- e.g. "Calls: STARRED · Messages: NONE" -->
+    <string name="mode_people_summary">Calls: %1$s · Messages: %2$s</string>
+</resources>

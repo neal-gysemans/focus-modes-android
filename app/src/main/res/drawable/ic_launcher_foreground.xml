@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder launcher foreground: a crescent inside the 72dp adaptive safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFE8EAF6"
+        android:pathData="M54,26a28,28 0,1 0,0 56a28,28 0,0 1,0 -56z" />
+    <path
+        android:fillColor="#FF7E57C2"
+        android:pathData="M54,38a16,16 0,1 0,0 32a16,16 0,0 1,0 -32z" />
+</vector>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The XML theme only covers the window between launch and Compose taking over;
+      all real styling lives in ui/FocusModesTheme. Kept deliberately bare so there
+      is no second source of truth for colour.
+    -->
+    <style name="Theme.FocusModes" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
