@@ -32,6 +32,17 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 
 `local.properties` (gitignored) needs `sdk.dir=/Users/nealgysemans/Library/Android/sdk`.
 
+Build-config traps (learned the hard way, do not regress):
+
+- **compileSdk is 37** (current androidx artifacts hard-fail AAR-metadata checks
+  against 36); minSdk 35 / targetSdk 36 are the product decision and stay.
+- **AGP 9 ships built-in Kotlin** and rejects the standalone
+  `org.jetbrains.kotlin.android` plugin — apply only
+  `org.jetbrains.kotlin.plugin.compose`. Working combo: AGP 9.4.0 + Gradle 9.7.1.
+- Probing Settings screens with `resolveActivity` requires the `<queries>`
+  declarations already in the manifests (package-visibility filtering otherwise
+  returns null and probes false-negative).
+
 ## Key design invariants (from the feasibility study)
 
 - Every state change funnels through **ModeEngine** — a reconciliation loop that
