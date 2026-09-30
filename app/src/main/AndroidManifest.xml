@@ -49,6 +49,26 @@
             <action android:name="android.settings.REQUEST_SCHEDULE_EXACT_ALARM" />
             <data android:scheme="package" />
         </intent>
+        <!--
+          The Contacts app, for the mode editor's "star someone and they get through"
+          explainer. Two forms because CATEGORY_APP_CONTACTS is the documented way in
+          and is what a stock launcher-registered Contacts app matches, while some OEM
+          builds (HyperOS among them) only expose the provider's VIEW activity. Without
+          these declarations resolveActivity() returns null for both and the button is
+          hidden even though the app is installed.
+
+          Note this is visibility only: the app never reads a single contact, and holds
+          no READ_CONTACTS permission. The allowlist is enforced system-side by
+          ZenPolicy, from stars the user sets in Contacts itself.
+        -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.APP_CONTACTS" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="vnd.android.cursor.dir/contact" />
+        </intent>
     </queries>
 
     <application

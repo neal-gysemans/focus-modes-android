@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import be.nealgysemans.focusmodes.R
 import be.nealgysemans.focusmodes.data.ModeEntity
+import be.nealgysemans.focusmodes.data.TriggerEntity
 import be.nealgysemans.focusmodes.engine.ActivationSource
 import be.nealgysemans.focusmodes.engine.ActiveState
 import be.nealgysemans.focusmodes.engine.Direction
@@ -47,9 +48,11 @@ import be.nealgysemans.focusmodes.engine.TriggerEvent
 import be.nealgysemans.focusmodes.health.Grant
 import be.nealgysemans.focusmodes.health.HealthCheck
 import be.nealgysemans.focusmodes.health.PermissionHealth
+import be.nealgysemans.focusmodes.schedule.nextBoundaryAfter
 import be.nealgysemans.focusmodes.tile.TapBehavior
 import be.nealgysemans.focusmodes.tile.TilePrefs
 import kotlinx.coroutines.flow.Flow
+import java.time.ZonedDateTime
 
 /**
  * Everything the screen can ask the Activity to do.
@@ -66,11 +69,27 @@ class ModeListActions(
     val onSaveMode: (ModeEntity) -> Unit,
     /** Store what a plain tap on the tile does. */
     val onTapBehaviorChange: (TapBehavior) -> Unit,
+    /**
+     * Persist one schedule row (new or edited, enabled or not) and reconcile.
+     *
+     * Insert and update are one action because the editor cannot usefully tell them
+     * apart: it hands back a complete row and Room upserts it. Re-arming the boundary
+     * alarm is not listed here because it is not a separate step —
+     * `AppGraph.afterTransition` re-arms after every reconcile.
+     */
+    val onSaveSchedule: (TriggerEntity) -> Unit,
+    /** Remove one schedule row and reconcile. */
+    val onDeleteSchedule: (TriggerEntity) -> Unit,
     /** `StatusBarManager.requestAddTileService`. */
     val onAddTile: () -> Unit,
     /** Launch the `POST_NOTIFICATIONS` runtime request. */
     val onRequestNotifications: () -> Unit,
-    /** Open a Settings screen for a grant that cannot be requested in-app. */
+    /**
+     * Start an activity outside the app: a Settings screen for a grant that cannot be
+     * requested in-app, or the Contacts app behind the editor's starred-contacts
+     * explainer. Always guarded — the caller has probed `resolveActivity` first, but a
+     * screen can vanish between the probe and the tap on an OEM build.
+     */
     val onOpenSettings: (Intent) -> Unit,
 )
 
@@ -95,12 +114,14 @@ class ModeListActions(
 @Composable
 fun ModeListScreen(
     modes: Flow<List<ModeEntity>>,
+    schedules: Flow<List<TriggerEntity>>,
     activeState: Flow<ActiveState>,
     tilePrefs: Flow<TilePrefs>,
     health: PermissionHealth,
     actions: ModeListActions,
 ) {
     val modeList by modes.collectAsStateWithLifecycle(initialValue = emptyList())
+    val scheduleList by schedules.collectAsStateWithLifecycle(initialValue = emptyList())
     val active by activeState.collectAsStateWithLifecycle(initialValue = ActiveState.IDLE)
     val prefs by tilePrefs.collectAsStateWithLifecycle(initialValue = TilePrefs())
 
@@ -108,8 +129,26 @@ fun ModeListScreen(
     // here would be read once and never again — the grants change in Settings, not on
     // this screen, so nothing in the composition would ever invalidate it.
     val checks = rememberHealthChecks(health)
+    val clock = rememberClockStyle()
+    val now = rememberNow()
 
-    var editing by remember { mutableStateOf<ModeEntity?>(null) }
+    // The mode being edited is held by **id**, not as an entity. Holding the entity
+    // would freeze the editor on the snapshot it opened with, and the editor's schedule
+    // list has to show rows that were written while it is open.
+    var editingModeId by remember { mutableStateOf<String?>(null) }
+    val editing = editingModeId?.let { id -> modeList.firstOrNull { it.id == id } }
+
+    if (editing != null) {
+        ModeEditorScreen(
+            mode = editing,
+            schedules = scheduleList,
+            health = health,
+            checks = checks,
+            actions = actions,
+            onClose = { editingModeId = null },
+        )
+        return
+    }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) },
@@ -127,7 +166,8 @@ fun ModeListScreen(
                 ModeRow(
                     mode = mode,
                     isActive = active.activeModeId == mode.id,
-                    onEdit = { editing = mode },
+                    nextBoundary = nextBoundaryLabelFor(mode.id, scheduleList, clock, now),
+                    onEdit = { editingModeId = mode.id },
                     onToggle = { wantOn ->
                         actions.onToggle(
                             TriggerEvent(
@@ -149,17 +189,28 @@ fun ModeListScreen(
             }
         }
     }
+}
 
-    editing?.let { mode ->
-        ModeEditorDialog(
-            mode = mode,
-            onDismiss = { editing = null },
-            onSave = { edited ->
-                actions.onSaveMode(edited)
-                editing = null
-            },
-        )
-    }
+/**
+ * "Mon 09:00" for the soonest boundary any of [modeId]'s **enabled** schedules will
+ * hit, or null when it has none.
+ *
+ * Deliberately the earliest across the mode's windows rather than one row's: the list
+ * answers "when will this mode next do something by itself?", and that is whichever of
+ * its schedules gets there first. The per-schedule answers live in the editor.
+ */
+private fun nextBoundaryLabelFor(
+    modeId: String,
+    schedules: List<TriggerEntity>,
+    clock: ClockStyle,
+    now: ZonedDateTime,
+): String? {
+    val windows = schedules
+        .filter { it.modeId == modeId && it.enabled }
+        .toScheduleRows()
+        .mapNotNull(ScheduleRow::window)
+    val boundary = windows.nextBoundaryAfter(now) ?: return null
+    return boundaryLabel(boundary, clock)
 }
 
 /**
@@ -173,11 +224,17 @@ fun ModeListScreen(
  *
  * Tapping the row opens the editor; the switch is the toggle. Two targets, and the
  * bigger one is the safer one.
+ *
+ * [nextBoundary] is the one thing here the user cannot work out by looking: a mode with
+ * a schedule can turn itself on, and a list that does not say when is a list that makes
+ * an unexplained change to the phone later. Null when the mode has no enabled schedule,
+ * in which case the line is absent rather than reading "never".
  */
 @Composable
 private fun ModeRow(
     mode: ModeEntity,
     isActive: Boolean,
+    nextBoundary: String?,
     onEdit: () -> Unit,
     onToggle: (Boolean) -> Unit,
 ) {
@@ -210,15 +267,25 @@ private fun ModeRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                // Plain language, not the enum's own name: "Calls: STARRED" is a
+                // database row leaking onto the screen, and the user never chose a
+                // constant — they chose "starred contacts".
                 Text(
                     text = stringResource(
                         R.string.mode_people_summary,
-                        mode.callsFrom.name,
-                        mode.messagesFrom.name,
+                        stringResource(mode.callsFrom.plainLabelRes),
+                        stringResource(mode.messagesFrom.plainLabelRes),
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                nextBoundary?.let {
+                    Text(
+                        text = stringResource(R.string.ui_schedule_next, it),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             Switch(checked = isActive, onCheckedChange = onToggle)
         }

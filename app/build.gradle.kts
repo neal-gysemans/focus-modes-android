@@ -67,4 +67,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
 
     testImplementation(libs.junit)
+    // Real org.json for the JVM tests only. android.jar's copy is stubs that throw,
+    // which would make every params_json decode silently fail in a unit test.
+    testImplementation(libs.json)
 }

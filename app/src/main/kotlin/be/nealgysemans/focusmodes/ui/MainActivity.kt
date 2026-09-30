@@ -15,6 +15,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import be.nealgysemans.focusmodes.R
 import be.nealgysemans.focusmodes.data.ModeEntity
+import be.nealgysemans.focusmodes.data.TriggerEntity
 import be.nealgysemans.focusmodes.di.AppGraph
 import be.nealgysemans.focusmodes.engine.Direction
 import be.nealgysemans.focusmodes.engine.TriggerEvent
@@ -64,6 +65,7 @@ class MainActivity : ComponentActivity() {
             FocusModesTheme {
                 ModeListScreen(
                     modes = graph.database.modeDao().observeModes(),
+                    schedules = graph.database.triggerDao().observeSchedules(),
                     activeState = graph.activeStateStore.flow,
                     tilePrefs = tilePreferences.flow,
                     health = graph.permissionHealth,
@@ -71,6 +73,8 @@ class MainActivity : ComponentActivity() {
                         onToggle = ::toggle,
                         onSaveMode = ::saveMode,
                         onTapBehaviorChange = ::setTapBehavior,
+                        onSaveSchedule = ::saveSchedule,
+                        onDeleteSchedule = ::deleteSchedule,
                         onAddTile = ::requestAddTile,
                         onRequestNotifications = ::requestNotificationPermission,
                         onOpenSettings = ::openSettings,
@@ -129,6 +133,34 @@ class MainActivity : ComponentActivity() {
 
     private fun setTapBehavior(behaviour: TapBehavior) {
         lifecycleScope.launch(Dispatchers.IO) { tilePreferences.setTapBehavior(behaviour) }
+    }
+
+    /**
+     * Persist one schedule row and let the engine work out what it means.
+     *
+     * Deliberately shorter than [saveMode]: there is no catalog to invalidate, because
+     * `RoomModeCatalog` snapshots *modes* and `TriggerScheduleSource` re-reads the
+     * trigger table on every reconcile, and there is no alarm to arm by hand, because
+     * `AppGraph.afterTransition` re-arms unconditionally after every reconcile. So the
+     * write plus a reconcile is the whole operation — and if that ever stops being true,
+     * the schedule that silently never fires is the symptom.
+     *
+     * The tile repaint waits for the reconcile to finish rather than firing alongside it:
+     * a schedule the user just switched on may turn a mode on *now*, and nudging the tile
+     * before the engine has decided repaints it with the old answer.
+     */
+    private fun saveSchedule(trigger: TriggerEntity) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            graph.database.triggerDao().upsert(trigger)
+            graph.reconcileAsync { TileNudge.refresh(applicationContext) }
+        }
+    }
+
+    private fun deleteSchedule(trigger: TriggerEntity) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            graph.database.triggerDao().delete(trigger)
+            graph.reconcileAsync { TileNudge.refresh(applicationContext) }
+        }
     }
 
     // ---------------------------------------------------------------------- platform

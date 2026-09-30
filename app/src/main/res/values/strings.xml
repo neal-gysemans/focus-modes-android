@@ -75,6 +75,82 @@
     <string name="action_fix">Fix this</string>
     <string name="action_allow">Allow</string>
 
+    <!-- ============================ Mode editor, extended ======================= -->
+
+    <!-- Nav-up on the editor. Says "Done" rather than "Back" because leaving the
+         screen is what commits the mode. -->
+    <string name="ui_editor_done">Done</string>
+    <string name="ui_editor_hint_applies_on_leave">Name, icon, colour, people and effects apply when you go back. Schedules save the moment you change them.</string>
+    <string name="ui_editor_name_blank">A mode needs a name. The previous one is kept until you type one.</string>
+
+    <!-- People filters, in plain language. The enum names (STARRED, CONTACTS…) are a
+         storage detail and must never reach the screen. -->
+    <string name="ui_people_starred">Starred contacts</string>
+    <string name="ui_people_contacts">All contacts</string>
+    <string name="ui_people_anyone">Anyone</string>
+    <string name="ui_people_none">No one</string>
+
+    <!-- Short forms for the selector chips, where the row label already says
+         "Calls from:" and repeating "contacts" four times is noise. -->
+    <string name="ui_people_starred_short">Starred</string>
+    <string name="ui_people_contacts_short">Contacts</string>
+    <string name="ui_people_anyone_short">Anyone</string>
+    <string name="ui_people_none_short">No one</string>
+
+    <string name="ui_editor_people_title">Who gets through</string>
+    <!-- e.g. "Calls from: Starred contacts" -->
+    <string name="ui_editor_calls_from">Calls from: %1$s</string>
+    <string name="ui_editor_messages_from">Messages from: %1$s</string>
+    <string name="ui_editor_repeat_callers">Let repeat callers through</string>
+    <string name="ui_editor_repeat_callers_summary">Someone who calls again within 15 minutes rings even when their calls are silenced.</string>
+    <string name="ui_editor_starred_explainer">Starred contacts are your allowlist: star someone in Contacts and they get through in every mode set to Starred contacts.</string>
+    <string name="ui_editor_open_contacts">Open Contacts</string>
+
+    <!-- Device effects. -->
+    <string name="ui_editor_effects_title">While this mode is on</string>
+    <string name="ui_editor_effect_grayscale">Greyscale screen</string>
+    <string name="ui_editor_effect_dim_wallpaper">Dim the wallpaper</string>
+    <string name="ui_editor_effect_night_mode">Dark theme</string>
+    <string name="ui_editor_effects_summary">Your phone decides whether to honour these. Some Android skins ignore one or more of them.</string>
+
+    <!-- ================================ Schedules =============================== -->
+
+    <string name="ui_schedules_title">Schedules</string>
+    <string name="ui_schedules_empty">No schedules yet. A schedule turns this mode on and off on its own.</string>
+    <string name="ui_schedules_add">Add a schedule</string>
+    <!-- e.g. "Weekdays · 09:00 – 17:00" -->
+    <string name="ui_schedule_summary">%1$s · %2$s</string>
+    <string name="ui_schedule_range">%1$s – %2$s</string>
+    <!-- Shown when the window runs past midnight, so the end time is tomorrow's. -->
+    <string name="ui_schedule_range_next_day">%1$s – %2$s next day</string>
+    <!-- e.g. "Next: Mon 09:00" -->
+    <string name="ui_schedule_next">Next: %1$s</string>
+    <string name="ui_schedule_disabled">Off</string>
+    <string name="ui_schedule_no_days">Runs on no days, so it never starts.</string>
+    <string name="ui_schedule_unreadable">This schedule cannot be read. Delete it and add a new one.</string>
+    <string name="ui_schedule_overlaps">Overlaps another schedule. Only one mode can be on, so whichever boundary comes last wins.</string>
+    <string name="ui_schedule_exact_alarm_hint">Exact alarms are not allowed yet, so this schedule can start and end minutes or hours late.</string>
+
+    <!-- Day sets. Named rather than spelled out, because "Mon, Tue, Wed, Thu, Fri"
+         is harder to read at a glance than "Weekdays". -->
+    <string name="ui_days_every_day">Every day</string>
+    <string name="ui_days_weekdays">Weekdays</string>
+    <string name="ui_days_weekends">Weekends</string>
+    <string name="ui_days_none">No days</string>
+
+    <!-- Schedule editor dialog. -->
+    <string name="ui_schedule_editor_new">New schedule</string>
+    <string name="ui_schedule_editor_edit">Edit schedule</string>
+    <string name="ui_schedule_editor_days">Days</string>
+    <string name="ui_schedule_editor_start">Starts</string>
+    <string name="ui_schedule_editor_end">Ends</string>
+    <string name="ui_schedule_editor_enabled">Schedule is on</string>
+    <string name="ui_schedule_editor_wraps">Runs past midnight and ends the next morning.</string>
+    <string name="ui_schedule_editor_same_time">Start and end are the same, so this covers the whole day.</string>
+    <string name="ui_action_delete">Delete</string>
+    <string name="ui_time_type_it">Type the time</string>
+    <string name="ui_time_pick_on_dial">Use the dial</string>
+
     <!-- Glyph names. Used as content descriptions in the icon picker: a bare
          silhouette with no label is unreadable to a screen reader. -->
     <string name="glyph_briefcase">Briefcase</string>
