@@ -205,35 +205,46 @@ Fill in on device. `—` = not applicable, `?` = could not determine.
 
 | # | Check | 17T Pro (HyperOS 3.x) | Nord 3 (OxygenOS 16) |
 |---|---|---|---|
-| 1 | Tile appears in QS edit list | | |
-| 2 | `requestAddTileService` result code | | |
-| 2b | Auto-deny after repeated denials? | | |
-| 3 | Tap → tile flip, median of 10 (ms) | | |
-| 3b | Tap → tile flip, max of 10 (ms) | | |
-| 3c | Flip perceptually instant? | | |
-| 4 | Tap → rule confirmed, median of 10 (ms) | | |
-| 4b | Tap → rule confirmed, max of 10 (ms) | | |
-| 4c | Zen-status broadcast arrived < 1.5 s? | | |
-| 5 | `showDialog` works + collapses shade (classic) | | |
-| 5b | `showDialog` works (ComposeView) | | |
-| 5c | Dialog styling matches OEM tiles? | | |
-| 6 | Dialog under keyguard behaviour | | |
-| 7 | Long-press opens picker activity | | |
-| 7b | Long-press transition feels fast? | | |
-| 8 | Subtitle shown on tile | | |
-| 9 | 2nd tile appears in edit list when enabled (no reboot) | | |
-| 9b | Placed 2nd tile disappears when disabled | | |
-| 9c | Position retained after re-enable | | |
-| 10 | `startActivityAndCollapse` tap → onCreate (ms) | | |
-| — | DND access grantable | | |
-| — | Zen rule creation succeeded | | |
-| — | Rule visible in DND settings + config activity opens | | |
+| 1 | Tile appears in QS edit list | yes | |
+| 2 | `requestAddTileService` result code | dialog shown, tile added (user accepted) | |
+| 2b | Auto-deny after repeated denials? | ? (not exercised) | |
+| 3 | Tap → tile flip, median of 10 (ms) | 2.0 (n=36) | |
+| 3b | Tap → tile flip, max of 10 (ms) | 3.9 | |
+| 3c | Flip perceptually instant? | yes | |
+| 4 | Tap → rule confirmed, median of 10 (ms) | 35.8 (n=4 true transitions) | |
+| 4b | Tap → rule confirmed, max of 10 (ms) | 45.2 | |
+| 4c | Zen-status broadcast arrived < 1.5 s? | yes — median 50.7 ms, max 73.4 | |
+| 5 | `showDialog` works + collapses shade (classic) | yes — dialog centered on screen | |
+| 5b | `showDialog` works (ComposeView) | yes — renders and works; styling better than classic (classic shows unused space above title) | |
+| 5c | Dialog styling matches OEM tiles? | acceptable; Compose variant preferred | |
+| 6 | Dialog under keyguard behaviour | ? (not exercised) | |
+| 7 | Long-press opens picker activity | yes (opens bottom-anchored) | |
+| 7b | Long-press transition feels fast? | yes | |
+| 8 | Subtitle shown on tile | icon-only by default; "Focus" label appears when control-center labels are enabled | |
+| 9 | 2nd tile appears in edit list when enabled (no reboot) | ? (not exercised) | |
+| 9b | Placed 2nd tile disappears when disabled | ? | |
+| 9c | Position retained after re-enable | ? | |
+| 10 | `startActivityAndCollapse` tap → onCreate (ms) | ? (not exercised) | |
+| — | DND access grantable | yes (per-app grant; second app granted without issue) | |
+| — | Zen rule creation succeeded | yes | |
+| — | Rule visible in DND settings + config activity opens | see zen spike: Modes list hidden, per-rule editor deep-links | |
 
 ### Device notes
 
 **17T Pro (HyperOS 3.x)**
 
->
+> Session 2026-09-30, HyperOS 3.0 / Android 16 (BP2A.250605.031.A3).
+> Verdict: tile feel is a solved problem on HyperOS — flip 2 ms, real rule
+> confirmed ~36 ms, broadcasts < 75 ms. Compose dialog is the keeper.
+> Sideload quirks (onboarding-relevant): `adb install` blocked with
+> INSTALL_FAILED_USER_RESTRICTED even with "Install via USB" on — `adb push`
+> + `pm install` from the device shell works; `adb shell input` requires the
+> separate "USB debugging (Security settings)" toggle. Tiles render as small
+> round icons (labels off by default) — per-mode glyphs must carry meaning;
+> users wanting an iOS-sized Focus button need the future home-screen widget,
+> not the tile. Rows marked "not exercised": auto-deny, keyguard dialog,
+> second-tile toggling, startActivityAndCollapse timing — rerun if they
+> become decision-relevant.
 
 **Nord 3 (OxygenOS 16)**
 
