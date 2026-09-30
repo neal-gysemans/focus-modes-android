@@ -71,6 +71,27 @@
         </activity>
 
         <!--
+          The tile's long-press target. MUST be exported and carry the
+          QS_TILE_PREFERENCES action, or long-pressing the tile does nothing.
+
+          Deliberately a fast mode picker rather than a settings screen: press-and-hold
+          on an iOS Control Center control gives you the control itself, larger.
+          excludeFromRecents + singleTop because it is a momentary overlay — it should
+          never accumulate in the recents list or stack on itself.
+        -->
+        <activity
+            android:name=".tile.TilePrefsActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:label="@string/tile_prefs_label"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.FocusModes.Translucent">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+            </intent-filter>
+        </activity>
+
+        <!--
           Quick Settings tile — the app's primary surface.
           ACTIVE_TILE: the app pushes updates via requestListeningState instead of
           only refreshing while the shade is open.

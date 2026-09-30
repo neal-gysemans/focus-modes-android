@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
 import be.nealgysemans.focusmodes.di.AppGraph
+import be.nealgysemans.focusmodes.notification.SurfaceSync
 import be.nealgysemans.focusmodes.zen.ZenStatusReceiver
 
 /**
@@ -35,6 +36,10 @@ class FocusModesApplication : Application() {
         graph.statusNotifier.ensureChannel()
         ZenStatusReceiver.register(this)
         registerActivityLifecycleCallbacks(ForegroundReconciler(graph))
+        // Cold-process coverage for the surfaces: an alarm- or boot-driven mode change
+        // must still update the tile cache and the ongoing notification even when no
+        // activity, tile, or receiver of the surface module ever starts. Idempotent.
+        SurfaceSync.start(this)
     }
 }
 

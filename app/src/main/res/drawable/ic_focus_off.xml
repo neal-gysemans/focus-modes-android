@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The "no mode is on" glyph: a hollow ring.
+
+  Paired with the solid per-mode glyphs on purpose — hollow-vs-filled is the one
+  distinction that still lands on a HyperOS tile, where the label is hidden and the
+  icon may be tinted either way round depending on the tile's own on/off state.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+    <path
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd"
+        android:pathData="M12,3 a9,9 0 1,0 0,18 a9,9 0 1,0 0,-18 Z M12,5 a7,7 0 1,0 0,14 a7,7 0 1,0 0,-14 Z" />
+</vector>
