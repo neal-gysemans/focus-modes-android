@@ -117,15 +117,15 @@ detail in the notes column.
 
 | # | Check | 17T Pro (A16 / HyperOS 3) | 17T Pro (A17 / HyperOS 3.3) | Nord 3 (OxygenOS 16) | Notes |
 |---|---|---|---|---|---|
-| 1 | Rule creation succeeds (`addAutomaticZenRule` returns an id) | | | | |
-| 2 | Activation silences a test notification (normal channel) | | | | |
-| 3 | Grayscale applies | | | | |
-| 4 | Night mode applies | | | | |
-| 5 | Dim wallpaper applies | | | | |
-| 6 | `SOURCE_SCHEDULE` ignored after manual off (snooze semantics) | | | | |
-| 7 | `SOURCE_USER_ACTION` punches through manual off | | | | |
-| 8 | Modes UI present (`areAutomaticZenRulesUserManaged` / settings action resolves) | | | | |
-| 9 | DND-access screen reachable | | | | |
+| 1 | Rule creation succeeds (`addAutomaticZenRule` returns an id) | yes | | | A16: read-back matched submission field-for-field — zero drift, all 3 effects + full policy stored |
+| 2 | Activation silences a test notification (normal channel) | yes | | | A16: silent into shade; bypass-DND channel sounded through (relay precondition proven); `canBypassDnd=true` accepted after DND-access grant + app restart |
+| 3 | Grayscale applies | yes | | | |
+| 4 | Night mode applies | yes | | | A16: verified from light theme → flipped dark on activation |
+| 5 | Dim wallpaper applies | yes | | | |
+| 6 | `SOURCE_SCHEDULE` ignored after manual off (snooze semantics) | yes | | | A16: two attempts both refused (`STATE_FALSE` read back), matching AOSP docs |
+| 7 | `SOURCE_USER_ACTION` punches through manual off | yes | | | A16: `STATE_TRUE` + ACTIVATED broadcast in ~30 ms |
+| 8 | Modes UI present (`areAutomaticZenRulesUserManaged` / settings action resolves) | partial | | | A16: `userManaged=true`, both AOSP activities exist and the per-rule editor deep-links fine (worked as system-side off surface) — but Settings navigation/search never surfaces Modes; app deep link is the only route |
+| 9 | DND-access screen reachable | yes | | | A16: grant screen opened directly, app listed, granted without workarounds |
 
 Supplementary observations worth writing down in the notes column:
 
