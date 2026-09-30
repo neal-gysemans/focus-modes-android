@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Deliberately NO android.permission.INTERNET. Nothing in this app needs the
+      network, and not holding the permission is the strongest possible statement
+      that focus data (who you allow through, when you sleep) never leaves the
+      device. Adding it later would be a privacy regression, not a feature.
+    -->
+
+    <!-- Gate on the AutomaticZenRule API. The user grants it via Settings
+         (ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS); see health/PermissionHealth. -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+
+    <!-- Schedule boundaries must land on the minute, and at 23:00 / 07:00 the
+         device is deep in doze. Revocable from API 33, so always checked first. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <!-- Alarms and the system's belief about rule state are both lost on reboot,
+         so BootReceiver reconciles from scratch. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- The ongoing "Work is on, tap to turn off" notification. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+      Package-visibility filtering makes resolveActivity() return null for Settings
+      intents unless the target action is declared here. health/PermissionHealth
+      probes both screens before offering a "Fix this" button, so without these
+      declarations it would report every Settings screen as missing and hide the
+      only way the user can grant DND access.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.settings.AUTOMATIC_ZEN_RULE_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.NOTIFICATION_POLICY_ACCESS_SETTINGS" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".FocusModesApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.FocusModes">
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.FocusModes">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          Quick Settings tile — the app's primary surface.
+          ACTIVE_TILE: the app pushes updates via requestListeningState instead of
+          only refreshing while the shade is open.
+          TOGGLEABLE_TILE: tells the system this is an on/off control, so it is
+          rendered and announced as a switch rather than a shortcut.
+        -->
+        <service
+            android:name=".tile.FocusTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_focus"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
+
+        <!-- Fires on the next schedule boundary; carries no payload, just "recompute". -->
+        <receiver
+            android:name=".schedule.ScheduleAlarmReceiver"
+            android:exported="false" />
+
+        <!-- Reconcile after a reboot or an app update; both wipe armed alarms. -->
+        <receiver
+            android:name=".schedule.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- The ongoing notification's "Turn off" action. -->
+        <receiver
+            android:name=".notification.TurnOffReceiver"
+            android:exported="false" />
+
+    </application>
+
+</manifest>
