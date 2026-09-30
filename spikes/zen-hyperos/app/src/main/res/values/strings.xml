@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Zen Spike</string>
+    <string name="rule_config_label">Zen Spike rule</string>
+    <!-- Shown by the system when offering rule types from this app. -->
+    <string name="rule_type">Spike test mode</string>
+</resources>
