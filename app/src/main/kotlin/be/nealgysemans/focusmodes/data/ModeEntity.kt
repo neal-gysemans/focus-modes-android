@@ -65,20 +65,8 @@ fun ModeEntity.toDomain(): FocusMode = FocusMode(
     zenRuleId = zenRuleId,
 )
 
-/** Domain to entity, for the edit screens. */
-fun FocusMode.toEntity(sortOrder: Int = 0): ModeEntity = ModeEntity(
-    id = id,
-    name = name,
-    iconKey = iconKey,
-    color = color,
-    callsFrom = callsFrom,
-    messagesFrom = messagesFrom,
-    repeatCallers = repeatCallers,
-    effects = EffectsColumns(
-        grayscale = effects.grayscale,
-        dimWallpaper = effects.dimWallpaper,
-        nightMode = effects.nightMode,
-    ),
-    zenRuleId = zenRuleId,
-    sortOrder = sortOrder,
-)
+// No `FocusMode.toEntity`. The mapping only ever needs to go one way: Room is the source of
+// truth, the editor edits a [ModeEntity] directly and hands one back, and `FocusMode` exists
+// so `engine/` can stay free of Room rather than as a form the UI fills in. A reverse mapping
+// would be the first step towards writing a mode back from the domain copy, which is how the
+// `sort_order` and `zen_rule_id` the entity carries and the domain does not get lost.

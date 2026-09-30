@@ -1,6 +1,5 @@
 package be.nealgysemans.focusmodes.ui
 
-import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,13 +30,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import be.nealgysemans.focusmodes.R
+import be.nealgysemans.focusmodes.data.ISO_WEEK
+import be.nealgysemans.focusmodes.schedule.wrapsMidnight
 
 /**
  * What one schedule is, as the user sets it: days, a start, an end, and whether it is
@@ -57,8 +57,8 @@ internal data class ScheduleDraft(
     /** Nothing to arm: a window with no days never starts, so Save would be a lie. */
     val isValid: Boolean get() = daysOfWeek.isNotEmpty()
 
-    /** Same rule `ScheduleWindows.wrapsMidnight` uses, so the copy cannot disagree. */
-    val wrapsMidnight: Boolean get() = endMinuteOfDay <= startMinuteOfDay
+    /** `ScheduleWindows.wrapsMidnight` itself, not a copy of it, so it cannot disagree. */
+    val wrapsMidnight: Boolean get() = wrapsMidnight(startMinuteOfDay, endMinuteOfDay)
 }
 
 /** Weekdays 09:00-17:00 — a first schedule someone is likely to keep. */
@@ -237,11 +237,14 @@ private fun TimePickerDialog(
     onDismiss: () -> Unit,
     onPick: (Int) -> Unit,
 ) {
-    val is24Hour = DateFormat.is24HourFormat(LocalContext.current)
+    // The same `rememberClockStyle` every label in this file goes through, rather than a
+    // second `DateFormat.is24HourFormat` read beside it. They cannot disagree now, which is
+    // the whole point: a 24-hour phone showing an AM/PM dial for a value it then prints in
+    // 24-hour is exactly the small wrongness this reads the device setting to avoid.
     val state = rememberTimePickerState(
         initialHour = initialMinuteOfDay / 60,
         initialMinute = initialMinuteOfDay % 60,
-        is24Hour = is24Hour,
+        is24Hour = rememberClockStyle().is24Hour,
     )
     var typing by remember { mutableStateOf(false) }
 

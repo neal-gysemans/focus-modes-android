@@ -61,10 +61,13 @@ class ModeEngine(
      * Called on boot, on every alarm fire, when the tile starts listening, and
      * whenever the app comes to the foreground. Safe to call at any time.
      *
-     * TODO(skeleton): also sweep every known mode with [ZenAdapter.readBack] and
-     *  heal rules the user edited or deleted in Settings, and re-arm the next
-     *  alarm via `schedule/AlarmScheduler` using
-     *  [ScheduleSource.nextBoundaryAfter].
+     * Healing the system side is part of this, in two halves. [ZenAdapter.ensureRule]
+     * below re-creates or re-pushes the rule for every mode, which covers one the user
+     * deleted or edited in Settings; [healDrift] re-asserts the mode the app believes is
+     * on when [ZenAdapter.readBack] says the system disagrees. Re-arming the next alarm
+     * from [ScheduleSource.nextBoundaryAfter] is not done here on purpose — it is a side
+     * effect rather than a decision, so `di/AppGraph.afterTransition` owns it and runs it
+     * after *every* transition, including [Transition.NoChange].
      */
     fun reconcile(): Transition {
         val now = ZonedDateTime.now(clock)
@@ -109,9 +112,8 @@ class ModeEngine(
             // Already on. A user tap on an already-scheduled mode upgrades it to a
             // pin, so the schedule's end boundary will not turn it off.
             if (event.source == ActivationSource.USER && !current.pinnedByUser) {
-                state.write(
-                    current.copy(source = ActivationSource.USER, pinnedByUser = true),
-                )
+                // Writing the source *is* setting the pin — see [ActiveState.pinnedByUser].
+                state.write(current.copy(source = ActivationSource.USER))
                 return Transition.Activated(event.modeId, ActivationSource.USER)
             }
             return Transition.Ignored(event, IgnoreReason.ALREADY_IN_DESIRED_STATE)
@@ -129,7 +131,6 @@ class ModeEngine(
                 activeModeId = event.modeId,
                 source = event.source,
                 since = clock.millis(),
-                pinnedByUser = event.source == ActivationSource.USER,
             ),
         )
         return Transition.Activated(event.modeId, event.source, listOfNotNull(displaced))
@@ -152,10 +153,14 @@ class ModeEngine(
      *
      * Costs one read per reconcile and keeps reconcile idempotent: when the
      * system agrees, nothing is written.
+     *
+     * `!= true` rather than `== false`, deliberately: [ZenAdapter.readBack] answers null for
+     * "cannot tell", and not being able to tell is a reason to re-assert — the activation is
+     * idempotent, while leaving a mode the app believes is on silently off is not recoverable
+     * until something else happens.
      */
     private fun healDrift(modeId: String, source: ActivationSource) {
-        val snapshot = zen.readBack(modeId)
-        if (snapshot == null || !snapshot.active) {
+        if (zen.readBack(modeId) != true) {
             zen.activate(modeId, source)
         }
     }

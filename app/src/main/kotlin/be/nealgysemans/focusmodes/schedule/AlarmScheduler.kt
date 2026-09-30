@@ -26,8 +26,11 @@ class AlarmScheduler(
     private val clock: Clock,
 ) {
 
-    private val alarmManager: AlarmManager
-        get() = context.getSystemService(AlarmManager::class.java)
+    // `by lazy`, not `get()`: [rearm] runs after every single transition, and each pass
+    // touches this two or three times. The manager is a process-lifetime object.
+    private val alarmManager: AlarmManager by lazy {
+        context.getSystemService(AlarmManager::class.java)
+    }
 
     /**
      * Cancel any pending alarm and arm the next boundary, if there is one.

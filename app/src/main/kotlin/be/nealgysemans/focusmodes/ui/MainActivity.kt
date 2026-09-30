@@ -3,8 +3,8 @@ package be.nealgysemans.focusmodes.ui
 import android.Manifest
 import android.app.StatusBarManager
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.drawable.Icon
 import android.os.Bundle
 import android.util.Log
@@ -14,17 +14,13 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import be.nealgysemans.focusmodes.R
-import be.nealgysemans.focusmodes.data.ModeEntity
-import be.nealgysemans.focusmodes.data.TriggerEntity
 import be.nealgysemans.focusmodes.di.AppGraph
 import be.nealgysemans.focusmodes.engine.Direction
 import be.nealgysemans.focusmodes.engine.TriggerEvent
 import be.nealgysemans.focusmodes.notification.SurfaceSync
 import be.nealgysemans.focusmodes.tile.FocusTileService
 import be.nealgysemans.focusmodes.tile.TapBehavior
-import be.nealgysemans.focusmodes.tile.TileNudge
 import be.nealgysemans.focusmodes.tile.TilePreferences
-import be.nealgysemans.focusmodes.tile.TileStateCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -71,10 +67,10 @@ class MainActivity : ComponentActivity() {
                     health = graph.permissionHealth,
                     actions = ModeListActions(
                         onToggle = ::toggle,
-                        onSaveMode = ::saveMode,
+                        onSaveMode = graph::saveModeAsync,
                         onTapBehaviorChange = ::setTapBehavior,
-                        onSaveSchedule = ::saveSchedule,
-                        onDeleteSchedule = ::deleteSchedule,
+                        onSaveSchedule = graph::saveScheduleAsync,
+                        onDeleteSchedule = graph::deleteScheduleAsync,
                         onAddTile = ::requestAddTile,
                         onRequestNotifications = ::requestNotificationPermission,
                         onOpenSettings = ::openSettings,
@@ -92,75 +88,19 @@ class MainActivity : ComponentActivity() {
     /**
      * Toggle a mode through the engine.
      *
-     * The optimistic cache flip and tile nudge mirror what the tile does to itself: the
-     * user may pull the shade down a moment later, and `requestListeningState` is the
-     * only thing that makes an `ACTIVE_TILE` repaint. `SurfaceSync` still has the last
-     * word once the engine has actually decided.
-     *
-     * Turning a mode *on* is also the first moment the ongoing notification matters, so
-     * that is where the runtime permission is asked for — not at launch, where the user
-     * has no idea what they would be saying yes to.
+     * The flip-submit-nudge trio is `AppGraph.submitUserToggleAsync`'s, shared with the
+     * four other surfaces that toggle by hand — this screen's only addition is the
+     * permission ask. Turning a mode *on* is the first moment the ongoing notification
+     * matters, so that is where the runtime permission is requested, not at launch where
+     * the user has no idea what they would be saying yes to.
      */
     private fun toggle(event: TriggerEvent) {
-        if (event.direction == Direction.ACTIVATE) {
-            TileStateCache.flipTo(event.modeId)
-            requestNotificationPermissionIfNeeded()
-        } else {
-            TileStateCache.flipTo(null)
-        }
-        graph.submitAsync(event)
-        TileNudge.refresh(applicationContext)
-    }
-
-    /**
-     * Persist an edited mode.
-     *
-     * Three follow-ups, all necessary: [be.nealgysemans.focusmodes.data.RoomModeCatalog]
-     * holds a snapshot the engine reads synchronously and must be invalidated by hand;
-     * `reconcile` pushes the new name and colour into the mode's `AutomaticZenRule` so
-     * the system's own Modes screen agrees with ours; and the tile has to repaint because
-     * its glyph and subtitle may just have changed. The Room flow takes care of this
-     * screen on its own.
-     */
-    private fun saveMode(mode: ModeEntity) {
-        lifecycleScope.launch(Dispatchers.IO) {
-            graph.database.modeDao().upsert(mode)
-            graph.modeCatalog.invalidate()
-            graph.reconcileAsync()
-            TileNudge.refresh(applicationContext)
-        }
+        if (event.direction == Direction.ACTIVATE) requestNotificationPermissionIfNeeded()
+        graph.submitUserToggleAsync(event)
     }
 
     private fun setTapBehavior(behaviour: TapBehavior) {
         lifecycleScope.launch(Dispatchers.IO) { tilePreferences.setTapBehavior(behaviour) }
-    }
-
-    /**
-     * Persist one schedule row and let the engine work out what it means.
-     *
-     * Deliberately shorter than [saveMode]: there is no catalog to invalidate, because
-     * `RoomModeCatalog` snapshots *modes* and `TriggerScheduleSource` re-reads the
-     * trigger table on every reconcile, and there is no alarm to arm by hand, because
-     * `AppGraph.afterTransition` re-arms unconditionally after every reconcile. So the
-     * write plus a reconcile is the whole operation — and if that ever stops being true,
-     * the schedule that silently never fires is the symptom.
-     *
-     * The tile repaint waits for the reconcile to finish rather than firing alongside it:
-     * a schedule the user just switched on may turn a mode on *now*, and nudging the tile
-     * before the engine has decided repaints it with the old answer.
-     */
-    private fun saveSchedule(trigger: TriggerEntity) {
-        lifecycleScope.launch(Dispatchers.IO) {
-            graph.database.triggerDao().upsert(trigger)
-            graph.reconcileAsync { TileNudge.refresh(applicationContext) }
-        }
-    }
-
-    private fun deleteSchedule(trigger: TriggerEntity) {
-        lifecycleScope.launch(Dispatchers.IO) {
-            graph.database.triggerDao().delete(trigger)
-            graph.reconcileAsync { TileNudge.refresh(applicationContext) }
-        }
     }
 
     // ---------------------------------------------------------------------- platform
@@ -210,9 +150,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestNotificationPermissionIfNeeded() {
-        val granted = checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
-        if (!granted) requestNotificationPermission()
+        // Asked of `PermissionHealth`, which owns this question for every other surface
+        // too — a second `checkSelfPermission` here is a second place the answer could be
+        // computed differently from the card the user is looking at.
+        if (!graph.permissionHealth.postNotifications().granted) requestNotificationPermission()
     }
 
     private fun requestNotificationPermission() {
@@ -234,3 +175,18 @@ class MainActivity : ComponentActivity() {
         const val TAG = "MainActivity"
     }
 }
+
+/**
+ * The intent that opens the app, for the four surfaces that have to build one.
+ *
+ * `NEW_TASK` because every caller is outside an Activity context or is about to finish —
+ * the tile service, the ongoing notification, and the two picker overlays. `CLEAR_TOP`
+ * because there is only one Activity: a user arriving from any of those should land on it
+ * rather than on a second copy stacked over the first.
+ *
+ * Shared rather than restated because it was restated four times, and the tile's copy had
+ * drifted — it omitted `CLEAR_TOP`, which is the one flag that stops the duplicate.
+ */
+internal fun mainActivityIntent(context: Context): Intent =
+    Intent(context, MainActivity::class.java)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)

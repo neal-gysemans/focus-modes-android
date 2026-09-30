@@ -1,7 +1,6 @@
 package be.nealgysemans.focusmodes.tile
 
 import android.app.PendingIntent
-import android.content.Intent
 import android.graphics.drawable.Icon
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
@@ -12,8 +11,8 @@ import be.nealgysemans.focusmodes.engine.ActivationSource
 import be.nealgysemans.focusmodes.engine.Direction
 import be.nealgysemans.focusmodes.engine.TriggerEvent
 import be.nealgysemans.focusmodes.notification.SurfaceSync
-import be.nealgysemans.focusmodes.ui.MainActivity
 import be.nealgysemans.focusmodes.ui.ModeGlyphs
+import be.nealgysemans.focusmodes.ui.mainActivityIntent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -84,11 +83,24 @@ class FocusTileService : TileService() {
      */
     private var renderJob: Job? = null
 
+    /**
+     * The two strings [paint] writes on every repaint, resolved once.
+     *
+     * `getString` is a resource lookup, and [paint] runs on the click path — three of them
+     * per tap (the label twice, plus the off subtitle) for two values that cannot change
+     * while the service is alive. `lateinit` rather than `by lazy` so the cost lands in
+     * [onCreate] with the icon pre-warm, not on whichever tap happens to be first.
+     */
+    private lateinit var tileLabel: String
+    private lateinit var offLabel: String
+
     override fun onCreate() {
         super.onCreate()
         // The tile is often the first component to start the process, so it is also
         // where the cross-surface observer gets kicked off. Idempotent.
         SurfaceSync.start(applicationContext)
+        tileLabel = getString(R.string.tile_label)
+        offLabel = getString(R.string.tile_subtitle_off)
         ModeGlyphs.ALL_RES.forEach { res -> icons[res] = Icon.createWithResource(this, res) }
     }
 
@@ -239,7 +251,9 @@ class FocusTileService : TileService() {
         paint(
             state = when {
                 // Never claim to be armed without the grant that makes arming possible.
-                !snapshot.dndGranted || snapshot.modes.isEmpty() -> Tile.STATE_UNAVAILABLE
+                // Same predicate [TileSnapshot.tap] returns Blocked for, so the tile cannot
+                // look available and then refuse to act.
+                snapshot.blocked -> Tile.STATE_UNAVAILABLE
                 active != null -> Tile.STATE_ACTIVE
                 else -> Tile.STATE_INACTIVE
             },
@@ -258,15 +272,13 @@ class FocusTileService : TileService() {
     private fun paint(state: Int, subtitle: String, glyphRes: Int) {
         val tile = qsTile ?: return
         tile.state = state
-        tile.label = getString(R.string.tile_label)
+        tile.label = tileLabel
         tile.subtitle = subtitle
         tile.icon = icons[glyphRes] ?: Icon.createWithResource(this, glyphRes)
-        tile.contentDescription = getString(R.string.tile_label)
+        tile.contentDescription = tileLabel
         tile.stateDescription = subtitle
         tile.updateTile()
     }
-
-    private val offLabel: String get() = getString(R.string.tile_subtitle_off)
 
     // ----------------------------------------------------------------------- picker
 
@@ -293,21 +305,21 @@ class FocusTileService : TileService() {
         }
     }
 
+    /**
+     * Commit a pick from the dialog.
+     *
+     * The decision is [TileSnapshot.pick]'s, shared with both picker activities, but it is
+     * asked of the **cache** rather than of [snapshot]: the dialog can have been open long
+     * enough for another surface to change what is on, and "Off" has to turn off whatever
+     * is actually on now. [snapshot] is still what the flip paints from — it holds the
+     * modes, which cannot have gone anywhere while the dialog was showing them.
+     *
+     * Not `submitUserToggleAsync`: this service paints itself and must never nudge itself.
+     */
     private fun onPicked(snapshot: TileSnapshot, picked: String?) {
-        val current = TileStateCache.value.activeModeId
-        when {
-            picked == null && current != null -> {
-                flip(snapshot, null)
-                dispatch(current, Direction.DEACTIVATE)
-            }
-
-            picked != null -> {
-                flip(snapshot, picked)
-                dispatch(picked, Direction.ACTIVATE)
-            }
-
-            else -> Unit // "Off" picked while already off.
-        }
+        val event = TileStateCache.value.pick(picked)?.toUserEvent() ?: return
+        flip(snapshot, picked)
+        dispatch(event.modeId, event.direction)
     }
 
     // -------------------------------------------------------------------- fallback
@@ -323,7 +335,7 @@ class FocusTileService : TileService() {
         val pending = PendingIntent.getActivity(
             this,
             0,
-            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            mainActivityIntent(this),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         runCatching { startActivityAndCollapse(pending) }

@@ -14,6 +14,7 @@ import be.nealgysemans.focusmodes.R
 import be.nealgysemans.focusmodes.engine.ActivationSource
 import be.nealgysemans.focusmodes.engine.FocusMode
 import be.nealgysemans.focusmodes.engine.ModeCatalog
+import be.nealgysemans.focusmodes.engine.ModeEffects
 import be.nealgysemans.focusmodes.engine.PeopleFilter
 import java.util.concurrent.ConcurrentHashMap
 
@@ -44,8 +45,36 @@ class SystemZenAdapter(
     private val onRuleIdResolved: (modeId: String, ruleId: String) -> Unit = { _, _ -> },
 ) : ZenAdapter {
 
-    private val notificationManager: NotificationManager
-        get() = context.getSystemService(NotificationManager::class.java)
+    // `by lazy`, not `get()`: every method here touches this, [guarded] reads
+    // `isNotificationPolicyAccessGranted` off it on every single call, and reconcile calls
+    // through several times per mode. The manager is a process-lifetime object.
+    private val notificationManager: NotificationManager by lazy {
+        context.getSystemService(NotificationManager::class.java)
+    }
+
+    /**
+     * The rule definition this process last successfully pushed, per mode.
+     *
+     * [ensureRule] is called for every mode on every reconcile — boot, every schedule
+     * boundary, every shade open, every foreground — and almost every one of those passes
+     * had nothing to do: build a rule, fetch the stored one over a binder, compare them
+     * field by field, conclude they match. On a three-mode device that is three rule builds
+     * and three binder reads per wake to learn nothing.
+     *
+     * So a pass is skipped outright when this process has already pushed exactly this
+     * definition *and* still holds a rule id for it. Both halves are needed: a cleared rule
+     * id (the `REMOVED` path) makes the skip impossible on its own, which is why clearing the
+     * id is all that path has to do.
+     *
+     * The honest cost: a rule the *user* edits in Settings is no longer noticed on the next
+     * reconcile of the same process. That is a smaller loss than it sounds — the platform
+     * refuses app updates to a user-edited rule anyway, so the old behaviour was to detect
+     * the drift, try, be refused and log it once a wake — and the entry is dropped whenever
+     * an update *is* refused, so the one case where re-checking could achieve something keeps
+     * re-checking. A mode edit in the app changes the fingerprint, and a fresh process starts
+     * with none.
+     */
+    private val pushedRules = ConcurrentHashMap<String, RuleFingerprint>()
 
     /**
      * Rule ids this process drove itself, with the `elapsedRealtime` of the write.
@@ -58,28 +87,42 @@ class SystemZenAdapter(
      */
     private val selfInitiated = ConcurrentHashMap<String, Long>()
 
-    override fun ensureRule(mode: FocusMode): String? =
-        guarded("ensureRule(${mode.id})", fallback = mode.zenRuleId) {
+    override fun ensureRule(mode: FocusMode): String? {
+        val cachedId = mode.zenRuleId
+        val fingerprint = mode.ruleFingerprint()
+        // Nothing to do, and nothing to ask the system: this process already pushed exactly
+        // this definition and still has the id the system gave it back. See [pushedRules].
+        if (cachedId != null && pushedRules[mode.id] == fingerprint) return cachedId
+
+        return guarded("ensureRule(${mode.id})", fallback = cachedId) {
             val desired = buildRule(mode)
-            val existingId = mode.zenRuleId
-                ?: return@guarded addRule(mode, desired)
+            val existingId = cachedId ?: return@guarded addRule(mode, desired, fingerprint)
 
             val stored = notificationManager.getAutomaticZenRule(existingId)
             if (stored == null) {
                 // The user deleted the rule in Settings (or an OEM cleanup did).
                 // Re-add and re-cache: Room is the source of truth, not the system.
                 Log.i(TAG, "rule $existingId for ${mode.id} is gone; adding a fresh one")
-                return@guarded addRule(mode, desired)
+                return@guarded addRule(mode, desired, fingerprint)
             }
 
-            if (stored.matches(desired)) return@guarded existingId
+            if (stored.matches(desired)) {
+                pushedRules[mode.id] = fingerprint
+                return@guarded existingId
+            }
 
-            val updated = notificationManager.updateAutomaticZenRule(existingId, desired)
-            if (!updated) {
+            if (notificationManager.updateAutomaticZenRule(existingId, desired)) {
+                pushedRules[mode.id] = fingerprint
+            } else {
                 // Once a user edits a rule in Settings the platform may refuse
                 // further app updates to it. That is not an error and must not be
                 // retried in a loop: log what the system actually holds, keep the
                 // id, and let the UI show a "managed in system settings" badge.
+                //
+                // Deliberately *not* remembered as pushed — what the system holds is not
+                // what we asked for, so the next reconcile has to look again rather than
+                // assume this definition landed.
+                pushedRules.remove(mode.id)
                 Log.w(
                     TAG,
                     "updateAutomaticZenRule($existingId) refused for ${mode.id} — rule looks " +
@@ -88,6 +131,7 @@ class SystemZenAdapter(
             }
             existingId
         }
+    }
 
     override fun activate(modeId: String, source: ActivationSource): Boolean =
         setState(modeId, Condition.STATE_TRUE, source)
@@ -95,17 +139,13 @@ class SystemZenAdapter(
     override fun deactivate(modeId: String, source: ActivationSource): Boolean =
         setState(modeId, Condition.STATE_FALSE, source)
 
-    override fun readBack(modeId: String): ZenRuleSnapshot? {
+    override fun readBack(modeId: String): Boolean? {
         val ruleId = ruleIdFor(modeId) ?: return null
+        // One binder call, for the one thing the engine asks. Fetching the rule object
+        // alongside the state was a second call per mode per reconcile for two fields
+        // (`exists`, `enabled`) nothing ever read.
         return guarded("readBack($modeId)", fallback = null) {
-            val rule = notificationManager.getAutomaticZenRule(ruleId)
-            val state = notificationManager.getAutomaticZenRuleState(ruleId)
-            ZenRuleSnapshot(
-                ruleId = ruleId,
-                exists = rule != null,
-                enabled = rule?.isEnabled == true,
-                active = state == Condition.STATE_TRUE,
-            )
+            notificationManager.getAutomaticZenRuleState(ruleId) == Condition.STATE_TRUE
         }
     }
 
@@ -117,20 +157,24 @@ class SystemZenAdapter(
      * Deliberately not consuming: one write can produce more than one broadcast,
      * and the worst case of a false positive is one skipped (idempotent) reconcile.
      */
-    fun wasSelfInitiated(ruleId: String, withinMillis: Long = SELF_ECHO_WINDOW_MS): Boolean {
+    fun wasSelfInitiated(ruleId: String): Boolean {
         val writtenAt = selfInitiated[ruleId] ?: return false
-        val age = SystemClock.elapsedRealtime() - writtenAt
-        if (age > withinMillis) {
+        if (SystemClock.elapsedRealtime() - writtenAt > SELF_ECHO_WINDOW_MS) {
             selfInitiated.remove(ruleId)
             return false
         }
         return true
     }
 
-    private fun addRule(mode: FocusMode, rule: AutomaticZenRule): String? {
+    private fun addRule(
+        mode: FocusMode,
+        rule: AutomaticZenRule,
+        fingerprint: RuleFingerprint,
+    ): String? {
         val id = notificationManager.addAutomaticZenRule(rule)
         Log.i(TAG, "addAutomaticZenRule -> $id for mode ${mode.id}")
         onRuleIdResolved(mode.id, id)
+        pushedRules[mode.id] = fingerprint
         return id
     }
 
@@ -263,6 +307,40 @@ class SystemZenAdapter(
             fallback
         }
     }
+
+    /**
+     * A [FocusMode] reduced to what actually ends up inside its `AutomaticZenRule`.
+     *
+     * Exactly the varying inputs to the fields [matches] compares, and deliberately **not**
+     * the whole `FocusMode`: `iconKey` and `color` are the app's own presentation and mean
+     * nothing to the system, so recolouring a mode must not look like a change the platform
+     * needs telling about. `zenRuleId` is out for the opposite reason — it is the system's
+     * answer, not part of the question.
+     *
+     * A value to compare rather than a hash, because a hash collision here would silently
+     * skip pushing a real change.
+     *
+     * If [matches] ever grows a field, this has to grow with it. The two are adjacent for
+     * that reason, and the direction of failure is the mild one: a fingerprint that is too
+     * coarse skips a needed push, which the next process start repairs.
+     */
+    private data class RuleFingerprint(
+        val id: String,
+        val name: String,
+        val callsFrom: PeopleFilter,
+        val messagesFrom: PeopleFilter,
+        val repeatCallers: Boolean,
+        val effects: ModeEffects,
+    )
+
+    private fun FocusMode.ruleFingerprint() = RuleFingerprint(
+        id = id,
+        name = name,
+        callsFrom = callsFrom,
+        messagesFrom = messagesFrom,
+        repeatCallers = repeatCallers,
+        effects = effects,
+    )
 
     /**
      * Whether the stored rule already says what we want it to say.

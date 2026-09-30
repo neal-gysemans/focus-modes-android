@@ -1,5 +1,8 @@
 package be.nealgysemans.focusmodes.tile
 
+import be.nealgysemans.focusmodes.engine.ActivationSource
+import be.nealgysemans.focusmodes.engine.Direction
+import be.nealgysemans.focusmodes.engine.TriggerEvent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -116,6 +119,21 @@ sealed interface TileTap {
 }
 
 /**
+ * True when no surface can arm anything from this snapshot: notification policy access is
+ * missing, or the user has not defined a mode to turn on.
+ *
+ * Named once because three surfaces branch on it and each drew its own conclusion from the
+ * same two fields — [tap] returns [TileTap.Blocked], `FocusTileService` paints
+ * `STATE_UNAVAILABLE`, and the widget replaces its whole card with a way into the app. All
+ * three are the same question, and all three must answer it the same way or a tile that
+ * says it is unavailable still dispatches.
+ *
+ * Both halves are fixable, and only in the app — which is why every surface's response is
+ * to send the user there rather than to fail quietly.
+ */
+val TileSnapshot.blocked: Boolean get() = !dndGranted || modes.isEmpty()
+
+/**
  * Resolve a tap against this snapshot.
  *
  * Nothing to do at all (no grant, no modes) is [TileTap.Blocked] whatever the
@@ -133,7 +151,7 @@ sealed interface TileTap {
  *    which case there is nothing to ask about).
  */
 fun TileSnapshot.tap(): TileTap {
-    if (!dndGranted || modes.isEmpty()) return TileTap.Blocked
+    if (blocked) return TileTap.Blocked
     if (tapBehavior == TapBehavior.CYCLE) return cycleTap()
     activeMode?.let { return TileTap.Deactivate(it.id) }
     if (tapBehavior == TapBehavior.ALWAYS_ASK) return TileTap.Ask
@@ -174,6 +192,41 @@ private fun TileSnapshot.cycleTap(): TileTap {
  * [TileTap.Blocked] and the "nothing left to re-activate" fallback to [TileTap.Ask].
  */
 fun TileSnapshot.toggleLastUsed(): TileTap = copy(tapBehavior = TapBehavior.LAST_USED).tap()
+
+/**
+ * What a choice made *in a picker* means: [picked] is a mode id, or null for the "Off" row.
+ *
+ * Deliberately not [tap] and not [toggleLastUsed]. Those two decide *which* mode a single
+ * ambiguous gesture is about; here the user has already said which, so there is nothing
+ * left to infer and no preference that could change the answer. What is left is only the
+ * direction, and the one case that is neither — which is why this was open-coded as the
+ * same three-branch `when` in the tile's dialog, the tile's long-press grid and the
+ * widget's picker.
+ *
+ * @return the toggle to submit, or **null** when "Off" was chosen while nothing was on.
+ *   That is a real outcome and not an error: the picker always offers "Off", including when
+ *   it is already the selected row, and there is then no mode to name in an event. The
+ *   engine would drop it as `ALREADY_IN_DESIRED_STATE` anyway, so the surface just closes.
+ */
+fun TileSnapshot.pick(picked: String?): TileTap? = when {
+    picked != null -> TileTap.Activate(picked)
+    activeModeId != null -> TileTap.Deactivate(activeModeId)
+    else -> null
+}
+
+/**
+ * The `USER` trigger this tap asks the engine for.
+ *
+ * Only [TileTap.Activate] and [TileTap.Deactivate] name a mode. [TileTap.Ask] and
+ * [TileTap.Blocked] are answered by opening a surface rather than by changing state, so
+ * they map to null — a caller that has one of those has a window to show, not an event to
+ * submit.
+ */
+fun TileTap.toUserEvent(): TriggerEvent? = when (this) {
+    is TileTap.Activate -> TriggerEvent(ActivationSource.USER, modeId, Direction.ACTIVATE)
+    is TileTap.Deactivate -> TriggerEvent(ActivationSource.USER, modeId, Direction.DEACTIVATE)
+    TileTap.Ask, TileTap.Blocked -> null
+}
 
 /**
  * Process-wide warm copy of [TileSnapshot], and the tile's render source.

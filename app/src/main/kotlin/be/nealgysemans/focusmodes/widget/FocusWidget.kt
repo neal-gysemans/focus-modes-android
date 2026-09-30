@@ -54,7 +54,9 @@ import be.nealgysemans.focusmodes.tile.TileMode
 import be.nealgysemans.focusmodes.tile.TileSnapshot
 import be.nealgysemans.focusmodes.tile.TileSnapshotSource
 import be.nealgysemans.focusmodes.tile.TileTap
+import be.nealgysemans.focusmodes.tile.blocked
 import be.nealgysemans.focusmodes.tile.toggleLastUsed
+import be.nealgysemans.focusmodes.ui.GLYPH_TO_BADGE_RATIO
 import be.nealgysemans.focusmodes.ui.MainActivity
 import be.nealgysemans.focusmodes.ui.ModeGlyphs
 import kotlinx.coroutines.flow.first
@@ -143,12 +145,17 @@ object FocusWidget : GlanceAppWidget() {
         SurfaceSync.start(context)
 
         val snapshots = TileSnapshotSource.flow(context)
-        // Read once *before* composing. `provideGlance` is suspending precisely so this
-        // is allowed, and it matters: composing from an empty snapshot first would push
-        // a "finish setting up" frame to the launcher and correct it a moment later.
-        val initial = runCatching { snapshots.first() }
-            .onFailure { Log.w(TAG, "initial snapshot read failed", it) }
-            .getOrDefault(TileSnapshot())
+        // A first frame *before* composing, because composing from an empty snapshot would
+        // push a "finish setting up" frame to the launcher and correct it a moment later.
+        //
+        // Usually free: the shared derivation is already holding a snapshot (the tile, the
+        // observer or another widget instance has it warm) and this is a volatile read.
+        // Only a genuinely cold process pays for a wait, and `provideGlance` is suspending
+        // precisely so that it can.
+        val initial = TileSnapshotSource.current()
+            ?: runCatching { snapshots.first() }
+                .onFailure { Log.w(TAG, "initial snapshot read failed", it) }
+                .getOrDefault(TileSnapshot())
 
         provideContent {
             val snapshot by snapshots.collectAsState(initial = initial)
@@ -194,8 +201,10 @@ private fun FocusWidgetBody(snapshot: TileSnapshot, size: DpSize) {
 
     // Nothing to draw and nothing a tap could usefully do: no DND grant, or no modes
     // defined. Both are only fixable in the app, so the whole card opens it. Decided
-    // here rather than inside the action so a blocked widget never dispatches at all.
-    if (!snapshot.dndGranted || snapshot.modes.isEmpty()) {
+    // here rather than inside the action so a blocked widget never dispatches at all —
+    // and decided by [TileSnapshot.blocked], the same predicate the tile paints
+    // STATE_UNAVAILABLE for, so the two surfaces cannot disagree about it.
+    if (snapshot.blocked) {
         Box(
             modifier = card.clickable(actionStartActivity<MainActivity>()).padding(CARD_PADDING),
             contentAlignment = Alignment.Center,
@@ -585,6 +594,10 @@ private fun OverflowCell(modifier: GlanceModifier) {
  * A circle is `cornerRadius` at half the size: Glance has no shape or border modifier,
  * and an arbitrary `cornerRadius` needs API 31 — comfortably under this app's minSdk 35.
  *
+ * The glyph sits at [GLYPH_TO_BADGE_RATIO] of the disc, which is `ui/GlyphBadge`'s own
+ * constant rather than a second copy of the number. The claim that the two look alike is
+ * now something the compiler keeps true; before, it was a comment beside a duplicate.
+ *
  * @param description null makes the chip decorative, for the one caller whose *zone*
  *   already carries the announcement (see [ToggleZone]). Two descriptions on nested views
  *   is how TalkBack ends up reading the state twice.
@@ -613,7 +626,7 @@ private fun GlyphChip(
         Image(
             provider = ImageProvider(glyphRes),
             contentDescription = description,
-            modifier = GlanceModifier.size(size * GLYPH_RATIO),
+            modifier = GlanceModifier.size(size * GLYPH_TO_BADGE_RATIO),
             colorFilter = ColorFilter.tint(
                 if (disc != null || onAccent) ON_ACCENT else GlanceTheme.colors.onSurfaceVariant,
             ),
@@ -686,6 +699,3 @@ private val CHEVRON_ZONE_WIDTH = 36.dp
 private val CHEVRON_SIZE = 20.dp
 private val DIVIDER_WIDTH = 1.dp
 private val DIVIDER_INSET = 8.dp
-
-/** Glyph-to-chip ratio, shared with `ui/GlyphBadge` so the chips look alike. */
-private const val GLYPH_RATIO = 0.55f

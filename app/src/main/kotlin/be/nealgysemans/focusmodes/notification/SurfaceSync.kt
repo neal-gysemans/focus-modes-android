@@ -46,11 +46,27 @@ import java.util.concurrent.atomic.AtomicBoolean
  * is idempotent and cheap, so calling it on every entry is the safe default rather than
  * something to be careful about.
  *
- * A single call from `FocusModesApplication.onCreate` (or from `AppGraph`'s
- * post-transition hook) would also cover the schedule-alarm and boot paths in a cold
- * process, where no surface of ours starts first. That file belongs to another module;
- * until the call lands there, an alarm-driven change in a cold process is reflected the
- * next time any surface starts — the engine state itself is already correct.
+ * `FocusModesApplication.onCreate` calls it too, which is what covers the schedule-alarm
+ * and boot paths in a cold process where no surface of ours starts first. The per-surface
+ * calls are still not redundant: `AppGraph.from` has a fallback for processes where a
+ * custom `Application` subclass is not the one responding, and in one of those the
+ * Application call never happens.
+ *
+ * ## Why it does not fan out twice per activation
+ *
+ * [apply] writes `lastUsedModeId`, and that value is *part of the snapshot it is
+ * observing* — so every activation produces a second emission whose only difference is
+ * the write this observer just made. Left alone that is a full second fan-out per
+ * toggle: a tile nudge, a Glance re-render of every placed widget and a notification
+ * re-post, for a value none of those three draws. So the last applied snapshot is kept
+ * and the second pass is recognised for what it is: the cache is still refreshed (the
+ * tile's click path decides from `lastUsedModeId`, so it must see the new value) and
+ * nothing else runs.
+ *
+ * Skipping the widget is safe for the same reason it is worth doing. `lastUsedModeId`
+ * only changes at the moment a mode comes *on*, and while a mode is on the widget's
+ * toggle zone reads "turn this off" — a decision that does not consult last-used at all.
+ * By the time it does matter, the mode has gone off, which is an emission of its own.
  */
 object SurfaceSync {
 
@@ -76,8 +92,8 @@ object SurfaceSync {
             .onFailure { Log.w(TAG, "ensureChannel failed", it) }
 
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
-            // Already distinct-until-changed at the source, so a write made from here
-            // (last-used) cannot bounce back in as a new emission.
+            // One collector, one coroutine — which is what makes the two `lastX` fields
+            // below safe as plain vars: nothing else ever touches them.
             TileSnapshotSource.flow(app).collect { snapshot ->
                 runCatching { apply(app, graph, snapshot, preferences) }
                     .onFailure { Log.w(TAG, "surface sync failed", it) }
@@ -86,13 +102,60 @@ object SurfaceSync {
         Log.d(TAG, "observing")
     }
 
+    /**
+     * The snapshot the last fan-out was performed for, or null before the first one.
+     *
+     * Two jobs. It is how the last-used echo is recognised (see the class KDoc), and
+     * `null` is also how "this is the first pass in this process" is known — which the
+     * notification's clear path needs, because a notification outlives the process that
+     * posted it.
+     */
+    private var lastApplied: TileSnapshot? = null
+
+    /** What the ongoing notification was last posted with, or null when it is cleared. */
+    private var lastShown: Shown? = null
+
+    /**
+     * Exactly the values [StatusNotifier.show] renders.
+     *
+     * Kept as its own type so "has anything the user would see changed?" is an equality
+     * check the compiler writes, rather than five comparisons someone has to remember to
+     * extend when a sixth value joins the notification.
+     */
+    private data class Shown(
+        val modeId: String,
+        val name: String,
+        val color: Int,
+        val glyphRes: Int,
+        val since: Long,
+    )
+
     private suspend fun apply(
         app: Context,
         graph: AppGraph,
         snapshot: TileSnapshot,
         preferences: TilePreferences,
     ) {
+        val previous = lastApplied
+        lastApplied = snapshot
+
+        // Always, and first: the tile's click path reads this and decides from it, so it
+        // has to be current even on a pass where nothing is repainted.
         TileStateCache.publish(snapshot)
+
+        // "Last used" means last used anywhere. Guarded so this write cannot loop: the
+        // write lands in the observed snapshot and comes straight back through here.
+        val active = snapshot.activeMode
+        if (active != null && snapshot.lastUsedModeId != active.id) {
+            preferences.setLastUsedModeId(active.id)
+        }
+
+        // The echo of the write above, arriving as its own emission. Nothing any surface
+        // draws has changed, so nothing is repainted.
+        if (previous != null && previous.copy(lastUsedModeId = snapshot.lastUsedModeId) == snapshot) {
+            return
+        }
+
         TileNudge.refresh(app)
         // Before the notification, deliberately: the widget is on screen the moment the
         // user looks at the home screen, while the notification is behind a shade pull.
@@ -100,24 +163,37 @@ object SurfaceSync {
         // cannot stop the rest of this fan-out.
         FocusWidget.refreshAll(app)
 
-        val active = snapshot.activeMode
         if (active == null) {
-            graph.statusNotifier.clear()
+            // `previous == null` is the first pass of this process, where "we have not
+            // posted one" is not the same as "there is none" — a notification survives
+            // the process that posted it, so the first idle pass always clears.
+            if (previous == null || lastShown != null) {
+                graph.statusNotifier.clear()
+                lastShown = null
+            }
             return
         }
 
-        graph.statusNotifier.show(
+        val shown = Shown(
             modeId = active.id,
             name = active.name,
             color = active.color,
             glyphRes = active.glyphRes,
             since = snapshot.activeSince,
         )
+        // A tile-preference change, a DND grant change or an edit to some *other* mode
+        // all arrive here with the notification's own values untouched. Re-posting an
+        // identical notification is a binder call and a shade animation for nothing.
+        if (shown == lastShown) return
+        lastShown = shown
 
-        // "Last used" means last used anywhere. Guarded so this write cannot loop.
-        if (snapshot.lastUsedModeId != active.id) {
-            preferences.setLastUsedModeId(active.id)
-        }
+        graph.statusNotifier.show(
+            modeId = shown.modeId,
+            name = shown.name,
+            color = shown.color,
+            glyphRes = shown.glyphRes,
+            since = shown.since,
+        )
     }
 
     private const val TAG = "SurfaceSync"

@@ -26,14 +26,17 @@
     <!--
       Package-visibility filtering makes resolveActivity() return null for Settings
       intents unless the target action is declared here. health/PermissionHealth
-      probes both screens before offering a "Fix this" button, so without these
+      probes each screen before offering a "Fix this" button, so without these
       declarations it would report every Settings screen as missing and hide the
       only way the user can grant DND access.
+
+      Every entry below has a live consumer. AUTOMATIC_ZEN_RULE_SETTINGS used to be here
+      too, for a "see this mode in Settings" affordance that was never built — an entry no
+      probe ever asked about, which reads as a capability the app has and does not.
     -->
     <queries>
-        <intent>
-            <action android:name="android.settings.AUTOMATIC_ZEN_RULE_SETTINGS" />
-        </intent>
+        <!-- Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS: the DND grant, which is
+             blocking, so this is the one entry the app is unusable without. -->
         <intent>
             <action android:name="android.settings.NOTIFICATION_POLICY_ACCESS_SETTINGS" />
         </intent>

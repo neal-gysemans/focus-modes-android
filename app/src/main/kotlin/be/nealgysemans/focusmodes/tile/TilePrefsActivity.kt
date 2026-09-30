@@ -1,6 +1,5 @@
 package be.nealgysemans.focusmodes.tile
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,13 +16,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import be.nealgysemans.focusmodes.di.AppGraph
-import be.nealgysemans.focusmodes.engine.ActivationSource
-import be.nealgysemans.focusmodes.engine.Direction
-import be.nealgysemans.focusmodes.engine.TriggerEvent
 import be.nealgysemans.focusmodes.notification.SurfaceSync
+import be.nealgysemans.focusmodes.ui.ActiveRowStyle
 import be.nealgysemans.focusmodes.ui.FocusModesTheme
-import be.nealgysemans.focusmodes.ui.MainActivity
 import be.nealgysemans.focusmodes.ui.ModeGrid
+import be.nealgysemans.focusmodes.ui.mainActivityIntent
 
 /**
  * The tile's long-press target (`QS_TILE_PREFERENCES`).
@@ -31,8 +28,8 @@ import be.nealgysemans.focusmodes.ui.ModeGrid
  * Deliberately **not** a settings screen. Press-and-hold on an iOS Control Center
  * control gives you the control itself, larger — so this is the mode grid floating
  * over a dimmed background: every mode visible, one tap commits, and the activity
- * finishes. The one thing that is not a mode is a text button into [MainActivity],
- * for the editing and permission work that genuinely needs a screen.
+ * finishes. The one thing that is not a mode is a text button into `ui/MainActivity`, for
+ * the editing and permission work that genuinely needs a screen.
  *
  * It renders from [TileStateCache] on the first frame (already warm, because the tile
  * was listening moments ago when the user long-pressed it) and then follows
@@ -67,6 +64,10 @@ class TilePrefsActivity : ComponentActivity() {
                         activeModeId = snapshot.activeModeId,
                         onPick = { picked -> commit(snapshot, picked) },
                         onOpenApp = ::openApp,
+                        // A cell per mode is a switch per mode: tapping the one that is
+                        // already on turns it off, which is what a grid of controls does
+                        // and what this surface has always done.
+                        activeRowStyle = ActiveRowStyle.ON_SWITCH,
                         modifier = Modifier
                             .padding(16.dp)
                             .navigationBarsPadding(),
@@ -79,31 +80,26 @@ class TilePrefsActivity : ComponentActivity() {
     /**
      * Toggle through the engine, then get out of the way.
      *
-     * The cache flip and the [TileNudge] are here rather than left to `SurfaceSync`
-     * because this activity is about to finish: the user's next glance is at the tile,
-     * and it should already be right by the time the shade repaints. `SurfaceSync` still
-     * runs and still has the last word.
+     * Both halves are shared rather than spelled out here: [TileSnapshot.pick] turns the
+     * chosen row into a direction (and into null when "Off" was picked while already off),
+     * and `AppGraph.submitUserToggleAsync` owns the cache flip, the submit and the tile
+     * nudge that every hand-made toggle owes. The flip and the nudge matter especially here
+     * because this activity is about to finish: the user's next glance is at the tile, and
+     * it should already be right by the time the shade repaints. `SurfaceSync` still runs
+     * and still has the last word.
+     *
+     * [finish] last, unlike `widget/FocusPickerActivity` — see that file for why the
+     * ordering differs between two otherwise identical commits.
      */
     private fun commit(snapshot: TileSnapshot, picked: String?) {
-        val event = when {
-            picked != null -> TriggerEvent(ActivationSource.USER, picked, Direction.ACTIVATE)
-            snapshot.activeModeId != null ->
-                TriggerEvent(ActivationSource.USER, snapshot.activeModeId, Direction.DEACTIVATE)
-            else -> null
-        }
-        if (event != null) {
-            TileStateCache.flipTo(picked)
-            AppGraph.from(applicationContext).submitAsync(event)
-            TileNudge.refresh(applicationContext)
+        snapshot.pick(picked)?.toUserEvent()?.let { event ->
+            AppGraph.from(applicationContext).submitUserToggleAsync(event)
         }
         finish()
     }
 
     private fun openApp() {
-        startActivity(
-            Intent(this, MainActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-        )
+        startActivity(mainActivityIntent(this))
         finish()
     }
 }

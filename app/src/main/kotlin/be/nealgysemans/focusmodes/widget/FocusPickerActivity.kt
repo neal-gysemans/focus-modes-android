@@ -17,14 +17,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import be.nealgysemans.focusmodes.di.AppGraph
-import be.nealgysemans.focusmodes.engine.ActivationSource
-import be.nealgysemans.focusmodes.engine.Direction
-import be.nealgysemans.focusmodes.engine.TriggerEvent
 import be.nealgysemans.focusmodes.notification.SurfaceSync
-import be.nealgysemans.focusmodes.tile.TileNudge
 import be.nealgysemans.focusmodes.tile.TileSnapshot
-import be.nealgysemans.focusmodes.tile.TileStateCache
 import be.nealgysemans.focusmodes.tile.TileSnapshotSource
+import be.nealgysemans.focusmodes.tile.TileStateCache
+import be.nealgysemans.focusmodes.tile.pick
+import be.nealgysemans.focusmodes.tile.toUserEvent
+import be.nealgysemans.focusmodes.ui.ActiveRowStyle
 import be.nealgysemans.focusmodes.ui.FocusModesTheme
 import be.nealgysemans.focusmodes.ui.MainActivity
 import be.nealgysemans.focusmodes.ui.ModePickerSheet
@@ -99,8 +98,7 @@ class FocusPickerActivity : ComponentActivity() {
                                 // this it stops reading as a card floating over the home
                                 // screen and starts reading as a screen.
                                 .widthIn(max = 420.dp),
-                            activeValueLabel = true,
-                            activeTapTurnsOff = true,
+                            activeRowStyle = ActiveRowStyle.ON_SWITCH,
                             onOpenSettings = ::openApp,
                         )
                     }
@@ -119,24 +117,15 @@ class FocusPickerActivity : ComponentActivity() {
      * under a card that is still dismissing. Same reason `ComposeModePickerDialog`
      * dismisses before it reports a pick.
      *
-     * The cache flip and the [TileNudge] are here rather than left to `SurfaceSync`
-     * because the tile has a much tighter repaint window than anything else and may be
-     * the next surface the user opens. `SurfaceSync` still has the last word.
+     * Past the ordering there is nothing here that is this surface's own.
+     * [TileSnapshot.pick] resolves the chosen row — including the null it returns for "Off"
+     * picked while already off, which is nothing to submit — and
+     * `AppGraph.submitUserToggleAsync` owns the cache flip, the submit and the tile nudge.
      */
     private fun commit(snapshot: TileSnapshot, picked: String?) {
-        val event = when {
-            picked != null -> TriggerEvent(ActivationSource.USER, picked, Direction.ACTIVATE)
-            snapshot.activeModeId != null ->
-                TriggerEvent(ActivationSource.USER, snapshot.activeModeId, Direction.DEACTIVATE)
-            // "Off" picked while already off: nothing to submit, just leave.
-            else -> null
-        }
+        val event = snapshot.pick(picked)?.toUserEvent()
         finish()
-        if (event != null) {
-            TileStateCache.flipTo(picked)
-            AppGraph.from(applicationContext).submitAsync(event)
-            TileNudge.refresh(applicationContext)
-        }
+        if (event != null) AppGraph.from(applicationContext).submitUserToggleAsync(event)
     }
 
     private fun openApp() {

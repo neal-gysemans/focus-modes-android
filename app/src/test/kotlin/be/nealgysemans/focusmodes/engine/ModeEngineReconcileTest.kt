@@ -28,16 +28,11 @@ class ModeEngineReconcileTest {
 
     @Before
     fun setUp() {
-        zen = FakeZenAdapter()
-        store = FakeActiveStateStore()
-        schedules = FakeScheduleSource()
-        engine = ModeEngine(
-            clock = clock,
-            catalog = FakeModeCatalog(listOf(work, sleep)),
-            schedules = schedules,
-            state = store,
-            zen = zen,
-        )
+        val fixture = testEngine(clock, listOf(work, sleep))
+        engine = fixture.engine
+        zen = fixture.zen
+        store = fixture.store
+        schedules = fixture.schedules
     }
 
     @Test

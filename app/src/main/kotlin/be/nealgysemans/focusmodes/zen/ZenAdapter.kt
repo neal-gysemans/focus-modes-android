@@ -4,23 +4,6 @@ import be.nealgysemans.focusmodes.engine.ActivationSource
 import be.nealgysemans.focusmodes.engine.FocusMode
 
 /**
- * What the system currently thinks about one mode's `AutomaticZenRule`.
- *
- * Returned by [ZenAdapter.readBack] so `ModeEngine.reconcile` can compare the
- * app's belief against system truth instead of assuming its last write stuck.
- */
-data class ZenRuleSnapshot(
-    /** The system-assigned rule id, or null if no rule exists for this mode. */
-    val ruleId: String?,
-    /** Whether the rule object exists at all (the user can delete it in Settings). */
-    val exists: Boolean,
-    /** Whether the rule is enabled — a disabled rule ignores state changes. */
-    val enabled: Boolean,
-    /** Whether the rule's condition is currently `STATE_TRUE`. */
-    val active: Boolean,
-)
-
-/**
  * The only seam between the app and the platform's zen APIs.
  *
  * Everything the engine needs from `NotificationManager` is expressed here, which
@@ -64,6 +47,19 @@ interface ZenAdapter {
      */
     fun deactivate(modeId: String, source: ActivationSource): Boolean
 
-    /** Read system truth for [modeId], or null when nothing is known about it. */
-    fun readBack(modeId: String): ZenRuleSnapshot?
+    /**
+     * Whether the system currently has [modeId]'s rule **on**, or null when nothing is
+     * known about it — no rule id cached yet, or the read was refused.
+     *
+     * This is what lets `ModeEngine.reconcile` compare its belief against system truth
+     * instead of assuming its last write stuck. A tri-state Boolean rather than the record
+     * of the whole rule this used to return: the engine's one question is "is it on?", and
+     * `null` and `false` genuinely differ there — the first means "cannot tell", which is
+     * still a reason to re-assert rather than a reason to conclude the rule is off.
+     *
+     * The record it replaced also carried whether the rule existed and whether it was
+     * enabled, and nothing ever read either. They were not free: answering them cost a
+     * second binder call, per mode, on every reconcile.
+     */
+    fun readBack(modeId: String): Boolean?
 }

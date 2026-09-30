@@ -20,23 +20,16 @@ class ModeEnginePriorityTest {
 
     private lateinit var zen: FakeZenAdapter
     private lateinit var store: FakeActiveStateStore
-    private lateinit var schedules: FakeScheduleSource
     private lateinit var engine: ModeEngine
 
     private val clock: Clock = Clock.fixed(Instant.parse("2026-09-30T10:00:00Z"), ZoneOffset.UTC)
 
     @Before
     fun setUp() {
-        zen = FakeZenAdapter()
-        store = FakeActiveStateStore()
-        schedules = FakeScheduleSource()
-        engine = ModeEngine(
-            clock = clock,
-            catalog = FakeModeCatalog(listOf(work, sleep)),
-            schedules = schedules,
-            state = store,
-            zen = zen,
-        )
+        val fixture = testEngine(clock, listOf(work, sleep))
+        engine = fixture.engine
+        zen = fixture.zen
+        store = fixture.store
     }
 
     // --- manual beats schedule ---------------------------------------------

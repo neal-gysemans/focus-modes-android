@@ -1,11 +1,13 @@
 package be.nealgysemans.focusmodes.ui
 
+import be.nealgysemans.focusmodes.data.ISO_WEEK
 import be.nealgysemans.focusmodes.data.MINUTES_PER_DAY
 import be.nealgysemans.focusmodes.data.TriggerEntity
+import be.nealgysemans.focusmodes.data.normalizeMinuteOfDay
 import be.nealgysemans.focusmodes.engine.ScheduleWindow
+import be.nealgysemans.focusmodes.schedule.covers
 import be.nealgysemans.focusmodes.schedule.nextBoundaryAfter
 import be.nealgysemans.focusmodes.schedule.toWindowOrNull
-import be.nealgysemans.focusmodes.schedule.wrapsMidnight
 import java.time.DayOfWeek
 import java.time.LocalTime
 import java.time.ZonedDateTime
@@ -21,17 +23,15 @@ import java.util.Locale
  * wrong — which schedules overlap, and when the next boundary is — on the JVM, with
  * no emulator and no screenshot to squint at.
  *
- * The boundary arithmetic is not reimplemented here. [nextBoundary] delegates to the
- * same `schedule/ScheduleWindows.nextBoundaryAfter` that `AlarmScheduler` arms from,
- * so the "Next: Mon 09:00" the user reads is by construction the instant the alarm is
- * actually set for. [coversWeekMinute] does restate the wrap rule from
- * `modeIdActiveAt`, because that function answers "which *one* mode wins" and overlap
- * honesty needs "which windows *all* apply" — the shared half is the two-interval
- * treatment of a midnight-wrapping window, and it is spelled the same way on purpose.
+ * None of the arithmetic is reimplemented here. [nextBoundary] delegates to the same
+ * `schedule/ScheduleWindows.nextBoundaryAfter` that `AlarmScheduler` arms from, so the
+ * "Next: Mon 09:00" the user reads is by construction the instant the alarm is actually
+ * set for. [coversWeekMinute] likewise delegates to `ScheduleWindows.covers`, the same
+ * predicate `modeIdActiveAt` samples: the two answer different questions — "which *one*
+ * mode wins" versus "which windows *all* apply" — but they must agree minute for minute,
+ * or the overlap note claims a collision the engine would never see. All this file adds
+ * is the week-minute coordinate system the overlap scan iterates over.
  */
-
-/** ISO day-of-week values in the order the UI shows them, Monday first. */
-internal val ISO_WEEK: List<Int> = (1..7).toList()
 
 /** Minutes in a week; the domain [coversWeekMinute] is sampled over. */
 internal const val MINUTES_PER_WEEK: Int = 7 * MINUTES_PER_DAY
@@ -74,21 +74,17 @@ internal fun List<ScheduleRow>.sortedForDisplay(): List<ScheduleRow> = sortedWit
 /**
  * True when this window is in force at [weekMinute], an offset from Monday 00:00.
  *
- * Mirrors `ScheduleWindows.modeIdActiveAt`: the end minute is exclusive, and a
- * wrapping window is two intervals — its own day from the start to midnight, plus the
- * tail of the *previous* day's occurrence up to the end.
+ * Only the coordinate change is here: a week-minute becomes an ISO day plus a
+ * minute-of-day, and the day *before* Monday is Sunday because the synthetic week wraps
+ * on itself. The predicate is `ScheduleWindows.covers`, the one the engine samples, so
+ * this cannot drift from it.
  */
 internal fun ScheduleWindow.coversWeekMinute(weekMinute: Int): Boolean {
     val day = weekMinute / MINUTES_PER_DAY + 1
     val minute = weekMinute % MINUTES_PER_DAY
     val previousDay = if (day == 1) ISO_WEEK.last() else day - 1
 
-    return if (wrapsMidnight) {
-        (day in daysOfWeek && minute >= startMinuteOfDay) ||
-            (previousDay in daysOfWeek && minute < endMinuteOfDay)
-    } else {
-        day in daysOfWeek && minute >= startMinuteOfDay && minute < endMinuteOfDay
-    }
+    return covers(day = day, minute = minute, previousDay = previousDay)
 }
 
 /**
@@ -212,7 +208,9 @@ internal fun dayName(isoDay: Int, style: ClockStyle): String =
  * get 12-hour times, and `ofLocalizedTime` would keep handing back 24-hour ones.
  */
 internal fun timeLabel(minuteOfDay: Int, style: ClockStyle): String {
-    val minute = ((minuteOfDay % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY
+    // The writer's own normaliser, so a value this prints and a value that gets stored fold
+    // identically — including the negative case, where a single `%` would keep the sign.
+    val minute = normalizeMinuteOfDay(minuteOfDay)
     return LocalTime.of(minute / 60, minute % 60).format(timeFormatter(style))
 }
 

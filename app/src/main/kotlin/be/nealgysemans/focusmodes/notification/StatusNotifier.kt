@@ -9,9 +9,8 @@ import android.content.Intent
 import android.graphics.drawable.Icon
 import android.util.Log
 import be.nealgysemans.focusmodes.R
-import be.nealgysemans.focusmodes.engine.FocusMode
-import be.nealgysemans.focusmodes.ui.MainActivity
 import be.nealgysemans.focusmodes.ui.ModeGlyphs
+import be.nealgysemans.focusmodes.ui.mainActivityIntent
 
 /**
  * The ongoing notification shown while a mode is active, with a one-tap turn-off.
@@ -32,8 +31,12 @@ import be.nealgysemans.focusmodes.ui.ModeGlyphs
  */
 class StatusNotifier(private val context: Context) {
 
-    private val notificationManager: NotificationManager
-        get() = context.getSystemService(NotificationManager::class.java)
+    // `by lazy`, not `get()`: a getter is a `getSystemService` lookup on every post, clear
+    // and channel check, and the manager is a process-lifetime object that cannot change
+    // under us. One lookup, on whichever of those happens first.
+    private val notificationManager: NotificationManager by lazy {
+        context.getSystemService(NotificationManager::class.java)
+    }
 
     /** Create the low-importance status channel. Idempotent; safe to call on every start. */
     fun ensureChannel() {
@@ -51,24 +54,13 @@ class StatusNotifier(private val context: Context) {
     }
 
     /**
-     * Show (or update) the ongoing notification for [mode].
-     *
-     * @param since epoch millis the mode came on, rendered as a chronometer.
-     */
-    fun show(mode: FocusMode, since: Long) = show(
-        modeId = mode.id,
-        name = mode.name,
-        color = mode.color,
-        glyphRes = ModeGlyphs.resFor(mode.iconKey),
-        since = since,
-    )
-
-    /**
      * Show (or update) the ongoing notification from already-resolved display values.
      *
-     * This overload exists for [SurfaceSync], which holds a flattened snapshot rather
-     * than a [FocusMode] — the tile and the notification then provably draw the same
-     * glyph and the same accent, because they are handed the same two values.
+     * Display values rather than a mode object, because [SurfaceSync] holds a flattened
+     * `TileSnapshot` — which means the tile and the notification provably draw the same
+     * glyph and the same accent, being handed the same two values. Deciding *whether*
+     * anything changed is `SurfaceSync`'s job too: it compares exactly these five
+     * arguments and does not call this at all when they are the same as last time.
      *
      * One fixed notification id, so switching modes replaces the notification instead
      * of stacking a second one.
@@ -90,7 +82,7 @@ class StatusNotifier(private val context: Context) {
             .setShowWhen(true)
             .setWhen(since.takeIf { it > 0L } ?: System.currentTimeMillis())
             .setUsesChronometer(true)
-            .setContentIntent(openAppIntent())
+            .setContentIntent(openAppIntent)
             .addAction(turnOffAction(modeId))
             .build()
 
@@ -127,16 +119,23 @@ class StatusNotifier(private val context: Context) {
     /**
      * Tapping the body opens the app.
      *
-     * `CLEAR_TOP` rather than a fresh task: there is only one activity, and a user
-     * arriving from the notification should land on it, not on a second copy.
+     * `by lazy` rather than a function: the intent is a constant of this process (see
+     * `ui/mainActivityIntent` for the flags) and so is the request code, so every call to
+     * `getActivity` returns the same `PendingIntent` — building it once saves an intent
+     * allocation and a binder round trip on every re-post, and this is re-posted on every
+     * mode change the notification survives.
+     *
+     * Not the turn-off intent, which genuinely varies: its request code is the mode's, so
+     * that two modes' actions cannot overwrite each other.
      */
-    private fun openAppIntent(): PendingIntent = PendingIntent.getActivity(
-        context,
-        OPEN_APP_REQUEST_CODE,
-        Intent(context, MainActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-    )
+    private val openAppIntent: PendingIntent by lazy {
+        PendingIntent.getActivity(
+            context,
+            OPEN_APP_REQUEST_CODE,
+            mainActivityIntent(context),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
 
     private companion object {
         const val TAG = "StatusNotifier"

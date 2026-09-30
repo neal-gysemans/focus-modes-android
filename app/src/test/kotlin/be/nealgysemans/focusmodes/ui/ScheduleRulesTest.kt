@@ -1,18 +1,21 @@
 package be.nealgysemans.focusmodes.ui
 
+import be.nealgysemans.focusmodes.EVERY_DAY
+import be.nealgysemans.focusmodes.FRIDAY
+import be.nealgysemans.focusmodes.MONDAY
+import be.nealgysemans.focusmodes.SATURDAY
+import be.nealgysemans.focusmodes.WEEKDAY_DAYS
+import be.nealgysemans.focusmodes.at
 import be.nealgysemans.focusmodes.data.TriggerEntity
 import be.nealgysemans.focusmodes.data.TriggerType
 import be.nealgysemans.focusmodes.data.scheduleTrigger
-import be.nealgysemans.focusmodes.engine.ScheduleWindow
+import be.nealgysemans.focusmodes.testWindow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.time.LocalDate
-import java.time.LocalTime
-import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.util.Locale
 
@@ -38,22 +41,21 @@ import java.util.Locale
  */
 class ScheduleRulesTest {
 
-    private val zone: ZoneId = ZoneId.of("Europe/Brussels")
     /** 24-hour: "Mon 09:00" is then a stable expectation. */
     private val clock = ClockStyle(locale = Locale.US, is24Hour = true)
 
     /** Same language, 12-hour clock — the other half of the device setting. */
     private val clock12 = clock.copy(is24Hour = false)
 
-    private val monday = LocalDate.parse("2026-09-28")
-    private val friday = LocalDate.parse("2026-10-02")
-    private val saturday = LocalDate.parse("2026-10-03")
+    private val monday = MONDAY
+    private val friday = FRIDAY
+    private val saturday = SATURDAY
 
     /** Weekdays 09:00-17:00. */
-    private val work = window("work", 9 * 60, 17 * 60, setOf(1, 2, 3, 4, 5))
+    private val work = window("work", 9 * 60, 17 * 60, WEEKDAY_DAYS)
 
     /** Every night 23:00-07:00 — the wrapping case. */
-    private val nightly = window("sleep", 23 * 60, 7 * 60, setOf(1, 2, 3, 4, 5, 6, 7))
+    private val nightly = window("sleep", 23 * 60, 7 * 60, EVERY_DAY)
 
     // --- which minutes a window covers ----------------------------------------
 
@@ -306,18 +308,11 @@ class ScheduleRulesTest {
 
     // --- helpers --------------------------------------------------------------
 
-    private fun window(name: String, start: Int, end: Int, days: Set<Int>) = ScheduleWindow(
-        triggerId = "trigger-$name",
-        modeId = "mode-$name",
-        startMinuteOfDay = start,
-        endMinuteOfDay = end,
-        daysOfWeek = days,
-    )
+    /** The shared builder, with this file's id convention applied. */
+    private fun window(name: String, start: Int, end: Int, days: Set<Int>) =
+        testWindow(triggerId = "trigger-$name", modeId = "mode-$name", start, end, days)
 
     /** ISO day (1 = Monday) plus a clock time, as an offset from Monday 00:00. */
     private fun weekMinute(day: Int, hour: Int, minute: Int) =
         (day - 1) * 24 * 60 + hour * 60 + minute
-
-    private fun LocalDate.at(time: String): ZonedDateTime =
-        ZonedDateTime.of(this, LocalTime.parse(time), zone)
 }
