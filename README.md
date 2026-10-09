@@ -1,36 +1,96 @@
 # Focus Modes for Android
 
-Recreates iPhone Focus modes as a third-party Android app: user-defined modes
-(Work, Sleep, Personal) backed by `AutomaticZenRule` + `ZenPolicy` +
-`ZenDeviceEffects`, with a Quick Settings tile as the primary surface.
+iPhone-style Focus modes for Android. Make modes such as Work, Sleep and Personal,
+choose who can reach you in each one, and switch between them from a Quick Settings
+tile, a home-screen widget, or a schedule.
 
-- **Stack:** Kotlin, Jetpack Compose, minSdk 35, targetSdk 36, no INTERNET permission
-- **Test devices:** Xiaomi 17T Pro (HyperOS 3, Android 16/17), OnePlus Nord 3 (OxygenOS 16)
-- **Feasibility study:** [docs/feasibility-report.html](docs/feasibility-report.html) —
-  API verification, HyperOS quirks, Play policy, architecture, MVP, spike plan.
+Each mode is a real Android Do Not Disturb rule (`AutomaticZenRule` + `ZenPolicy` +
+`ZenDeviceEffects`). That means the system enforces who gets through, and the app
+never has to read your notifications.
+
+## Features
+
+- **Modes with their own rules.** Each mode sets whose calls and messages get
+  through (starred contacts, all contacts, anyone or no one) and whether repeat
+  callers are allowed.
+- **Device effects per mode.** Greyscale, dimmed wallpaper and dark theme.
+- **Quick Settings tile.** Tap to toggle and long-press for the mode picker. Tapping
+  can turn on the last-used mode, ask which mode, or cycle through modes.
+- **Home-screen widget.** Modelled on the iPhone Focus control.
+- **Schedules.** A mode turns on and off by time and weekday, overnight windows
+  included. If you turn a scheduled mode off by hand, it stays off until you turn
+  it back on or the next scheduled period starts.
+- **One mode at a time.** Turning one on turns the others off, so you always know
+  which rules apply.
+
+## Privacy
+
+Focus Modes has **no internet permission**, so it cannot send anything anywhere.
+It has no accounts, analytics or ads. Your modes and schedules stay on your phone.
+It doesn't read your contacts or notifications either: "starred contacts" are
+matched by Android itself.
+
+## Install
+
+Requires **Android 15 or newer**.
+
+1. Download the latest `focus-modes-*.apk` from
+   [Releases](https://github.com/neal-gysemans/focus-modes-android/releases/latest).
+2. Open it on your phone and allow installing from your browser or file manager
+   when Android asks.
+3. Open Focus Modes and grant the access it asks for:
+   - **Do Not Disturb access**, so it can manage its modes. Required.
+   - **Alarms & reminders**, so schedules fire on the minute.
+   - **Notifications**, for the "mode is on" notification with its *Turn off* button.
+4. Add the **Focus** tile to Quick Settings from the app, or by editing your tiles.
+
+**Xiaomi / HyperOS, and other phones with aggressive battery savers:** turn on
+*Autostart* and set battery usage to *No restrictions* for Focus Modes, or schedules
+may fire late. Signed releases update in place, so install new versions over the old
+one.
 
 ## Repo layout
 
 | Path | Purpose |
 |---|---|
-| `app/` (+ root Gradle) | The app skeleton — ModeEngine, zen adapter, tile, data layer |
-| `spikes/zen-hyperos/` | Spike #1: standalone diagnostic app — do third-party zen rules work on HyperOS? |
-| `spikes/tile-feel/` | Spike #2: standalone diagnostic app — tile latency, dialog picker, add-tile flow |
-| `docs/` | Feasibility report and spike findings |
+| `app/` (+ root Gradle) | The app: ModeEngine, zen adapter, tile, widget, schedules, data layer |
+| `spikes/zen-hyperos/` | Spike #1: standalone diagnostic app. Do third-party zen rules work on HyperOS? |
+| `spikes/tile-feel/` | Spike #2: standalone diagnostic app. Tile latency, dialog picker, add-tile flow |
+| `docs/` | Feasibility report and widget spec |
 
-Spikes are standalone Gradle projects (own wrapper) so they build independently
-of the main app.
+The [feasibility study](docs/feasibility-report.html) covers the research behind the
+app: API verification, HyperOS quirks, Play policy, architecture and the MVP scope.
+
+The spikes are standalone Gradle projects with their own wrappers, so they build
+independently of the main app.
 
 ## Building
 
-No system Gradle/JDK on this machine; use the Android Studio JBR:
+Needs a JDK 17+ (Android Studio's bundled JBR works) and the Android SDK.
 
 ```sh
-export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
-./gradlew assembleDebug
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"  # macOS example
+echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties                        # gitignored
+./gradlew assembleDebug      # debug build
+./gradlew testDebugUnitTest  # JVM unit tests
+./gradlew assembleRelease    # minified release; unsigned unless signing is configured
 ```
 
-`local.properties` (gitignored) needs `sdk.dir=/Users/nealgysemans/Library/Android/sdk`.
+### Release signing
+
+Release signing is read from your **user-level** `~/.gradle/gradle.properties`.
+It is never read from this repo, and no key or password is committed:
+
+```properties
+focusModes.storeFile=/absolute/path/to/release.jks
+focusModes.storePassword=...
+focusModes.keyAlias=...
+focusModes.keyPassword=...
+```
+
+Without these properties, `assembleRelease` produces an unsigned APK. Keep the keystore
+backed up. An APK signed with a different key can't update an installed copy; users
+would have to uninstall it and lose their modes.
 
 Build-config traps (learned the hard way, do not regress):
 
