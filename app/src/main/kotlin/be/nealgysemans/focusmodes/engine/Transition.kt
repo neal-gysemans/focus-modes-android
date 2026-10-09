@@ -10,6 +10,9 @@ enum class IgnoreReason {
     /** A user pin is in force and a schedule/context trigger tried to override it. */
     USER_PIN_HOLDS,
 
+    /** The user turned this mode off during its schedule window, and the window is still open. */
+    USER_DISMISSED,
+
     /** The event asked for the state the engine is already in. */
     ALREADY_IN_DESIRED_STATE,
 

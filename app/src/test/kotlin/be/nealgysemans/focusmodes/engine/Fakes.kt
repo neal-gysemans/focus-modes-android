@@ -1,7 +1,12 @@
 package be.nealgysemans.focusmodes.engine
 
+import be.nealgysemans.focusmodes.schedule.modeIdActiveAt
+import be.nealgysemans.focusmodes.schedule.nextBoundaryAfter
 import be.nealgysemans.focusmodes.zen.ZenAdapter
 import java.time.Clock
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.ZonedDateTime
 
 /**
@@ -90,11 +95,28 @@ class FakeModeCatalog(private val modes: List<FocusMode>) : ModeCatalog {
     override fun modes(): List<FocusMode> = modes
 }
 
-/** [ScheduleSource] that answers with whatever the test sets. */
+/**
+ * [ScheduleSource] that answers with whatever the test sets: a fixed [desiredModeId], or —
+ * once [windows] is set — the real clock arithmetic over those windows, for tests that
+ * need the answer to change as time moves.
+ */
 class FakeScheduleSource(var desiredModeId: String? = null) : ScheduleSource {
-    override fun modeIdActiveAt(now: ZonedDateTime): String? = desiredModeId
+    var windows: List<ScheduleWindow>? = null
 
-    override fun nextBoundaryAfter(now: ZonedDateTime): ZonedDateTime? = null
+    override fun modeIdActiveAt(now: ZonedDateTime): String? =
+        windows?.modeIdActiveAt(now) ?: desiredModeId
+
+    override fun nextBoundaryAfter(now: ZonedDateTime): ZonedDateTime? =
+        windows?.nextBoundaryAfter(now)
+}
+
+/** A [Clock] a test can move forward. */
+class MutableClock(var instant: Instant, private val zone: ZoneId = ZoneOffset.UTC) : Clock() {
+    override fun getZone(): ZoneId = zone
+
+    override fun withZone(zone: ZoneId): Clock = MutableClock(instant, zone)
+
+    override fun instant(): Instant = instant
 }
 
 /** Minimal mode fixture; only the id matters to the priority policy. */

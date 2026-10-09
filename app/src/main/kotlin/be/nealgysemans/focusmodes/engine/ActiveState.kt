@@ -11,14 +11,33 @@ package be.nealgysemans.focusmodes.engine
  * @property source what last changed it; drives the `Condition` source on re-assert.
  * @property since epoch millis of the transition, for the status notification's
  *   "on since" text and for debugging reconcile loops.
+ * @property dismissedModeId a scheduled mode the user turned off by hand while its
+ *   schedule was still asking for it. Reconcile leaves it off until [dismissedUntil].
+ * @property dismissedUntil epoch millis at which the dismissal lapses: the moment the
+ *   schedule stops asking for [dismissedModeId], so the next scheduled period starts it
+ *   again. [Long.MAX_VALUE] when the schedule never lets go.
  */
 data class ActiveState(
     val activeModeId: String? = null,
     val source: ActivationSource? = null,
     val since: Long = 0L,
+    val dismissedModeId: String? = null,
+    val dismissedUntil: Long = 0L,
 ) {
     /** True when no mode is believed active. */
     val isIdle: Boolean get() = activeModeId == null
+
+    /**
+     * True when the user turned [modeId] off during its scheduled window and that window
+     * has not ended yet at [nowMillis].
+     *
+     * Without this, turning a scheduled mode off lasted exactly until the next reconcile —
+     * a tile listening, the app coming to the foreground, the system's own status
+     * broadcast — which saw the window still open and turned the mode straight back on.
+     * The user turned it off again, and the two fought in a loop.
+     */
+    fun dismisses(modeId: String?, nowMillis: Long): Boolean =
+        modeId != null && modeId == dismissedModeId && nowMillis < dismissedUntil
 
     /**
      * True when a human turned this on. A pin outranks every schedule and context trigger
