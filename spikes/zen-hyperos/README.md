@@ -21,7 +21,7 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-`local.properties` (gitignored) needs `sdk.dir=/Users/nealgysemans/Library/Android/sdk`.
+`local.properties` (gitignored) needs `sdk.dir=$HOME/Library/Android/sdk`.
 
 Toolchain: Gradle 9.7.1 · AGP 9.4.0 (built-in Kotlin, no separate KGP) ·
 Kotlin 2.4.10 · Compose BOM 2026.09.00 · minSdk 35 · targetSdk 36 · compileSdk 37.

@@ -23,7 +23,7 @@ Three things are being measured:
 ```sh
 cd spikes/tile-feel
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
-echo "sdk.dir=/Users/nealgysemans/Library/Android/sdk" > local.properties   # gitignored
+echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties   # gitignored
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb logcat -s FocusTile:I SecondTile:I ZenController:W

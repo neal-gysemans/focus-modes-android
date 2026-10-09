@@ -42,6 +42,14 @@ class ActiveStatePreferences(private val context: Context) : ActiveStateStore {
                 prefs[KEY_SOURCE] = (state.source ?: ActivationSource.USER).name
                 prefs[KEY_SINCE] = state.since
             }
+            // Independent of the active mode: a dismissal matters most while idle.
+            if (state.dismissedModeId == null) {
+                prefs.remove(KEY_DISMISSED_MODE_ID)
+                prefs.remove(KEY_DISMISSED_UNTIL)
+            } else {
+                prefs[KEY_DISMISSED_MODE_ID] = state.dismissedModeId
+                prefs[KEY_DISMISSED_UNTIL] = state.dismissedUntil
+            }
         }
     }
 
@@ -72,8 +80,12 @@ class ActiveStatePreferences(private val context: Context) : ActiveStateStore {
      * used to.
      */
     private fun Preferences.toActiveState(): ActiveState {
-        val modeId = this[KEY_ACTIVE_MODE_ID] ?: return ActiveState.IDLE
-        return ActiveState(
+        val dismissal = ActiveState(
+            dismissedModeId = this[KEY_DISMISSED_MODE_ID],
+            dismissedUntil = this[KEY_DISMISSED_UNTIL] ?: 0L,
+        )
+        val modeId = this[KEY_ACTIVE_MODE_ID] ?: return dismissal
+        return dismissal.copy(
             activeModeId = modeId,
             source = this[KEY_SOURCE]?.let { name ->
                 ActivationSource.entries.firstOrNull { it.name == name }
@@ -86,5 +98,7 @@ class ActiveStatePreferences(private val context: Context) : ActiveStateStore {
         val KEY_ACTIVE_MODE_ID = stringPreferencesKey("active_mode_id")
         val KEY_SOURCE = stringPreferencesKey("source")
         val KEY_SINCE = longPreferencesKey("since")
+        val KEY_DISMISSED_MODE_ID = stringPreferencesKey("dismissed_mode_id")
+        val KEY_DISMISSED_UNTIL = longPreferencesKey("dismissed_until")
     }
 }

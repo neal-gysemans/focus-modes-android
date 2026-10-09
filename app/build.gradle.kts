@@ -14,12 +14,28 @@ android {
         applicationId = "be.nealgysemans.focusmodes"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "1.0.0"
+    }
+
+    // Release signing comes from the *user-level* ~/.gradle/gradle.properties, never from
+    // this repo: the keystore and its passwords must not be committed. Without those
+    // properties the release build is simply unsigned, so anyone can still build it.
+    val releaseStoreFile = providers.gradleProperty("focusModes.storeFile").orNull
+    signingConfigs {
+        if (releaseStoreFile != null) {
+            create("release") {
+                storeFile = file(releaseStoreFile)
+                storePassword = providers.gradleProperty("focusModes.storePassword").get()
+                keyAlias = providers.gradleProperty("focusModes.keyAlias").get()
+                keyPassword = providers.gradleProperty("focusModes.keyPassword").get()
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
