@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Placeholder launcher foreground: a crescent inside the 72dp adaptive safe zone. -->
+<!--
+  Launcher foreground: a crescent moon inside the 72dp adaptive safe zone (18..90).
+
+  Outer edge: the left half of a 28dp-radius circle, top to bottom. Inner edge: an
+  elliptical arc (rx 12) back up to the top, so the moon is 16dp thick at its widest.
+  The two arcs must bulge by *different* amounts — the previous placeholder traced the
+  same half-circle twice, which encloses no area and rendered as a blank icon.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -7,8 +14,5 @@
     android:viewportHeight="108">
     <path
         android:fillColor="#FFE8EAF6"
-        android:pathData="M54,26a28,28 0,1 0,0 56a28,28 0,0 1,0 -56z" />
-    <path
-        android:fillColor="#FF7E57C2"
-        android:pathData="M54,38a16,16 0,1 0,0 32a16,16 0,0 1,0 -32z" />
+        android:pathData="M66,26 A28,28 0 0,0 66,82 A12,28 0 0,1 66,26 Z" />
 </vector>

@@ -14,8 +14,8 @@ android {
         applicationId = "be.nealgysemans.focusmodes"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 2
-        versionName = "1.0.0"
+        versionCode = 3
+        versionName = "1.0.1"
     }
 
     // Release signing comes from the *user-level* ~/.gradle/gradle.properties, never from

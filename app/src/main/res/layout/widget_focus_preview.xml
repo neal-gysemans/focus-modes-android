@@ -47,11 +47,15 @@
         android:textSize="15sp"
         android:textStyle="bold" />
 
-    <View
+    <!-- An ImageView, not a plain View: a widget layout may only use the classes
+         RemoteViews allows, and a bare View makes the launcher refuse the whole preview
+         ("Couldn't add widget"). Guarded by WidgetLayoutClassesTest. -->
+    <ImageView
         android:layout_width="1dp"
         android:layout_height="match_parent"
         android:layout_marginVertical="8dp"
-        android:background="@color/widget_preview_hairline" />
+        android:background="@color/widget_preview_hairline"
+        android:importantForAccessibility="no" />
 
     <ImageView
         android:layout_width="20dp"
