@@ -115,3 +115,7 @@ Build-config traps (learned the hard way, do not regress):
   silently freeze app updates to a rule).
 - Allowed people = starred contacts, enforced by `ZenPolicy` (system-side),
   never by the notification relay.
+
+## License
+
+[MIT](LICENSE)
